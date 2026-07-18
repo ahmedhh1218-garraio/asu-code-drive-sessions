@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Code &amp; Drive · Level 2 — Interactive Sessions</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/deck.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="dot"></span> Code&nbsp;&amp;&nbsp;Drive <small>· Lvl 2</small></div>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="session1.html">S1</a>
+    <!-- PUBLISH: uncomment each tab here (and in every published page) as the session goes live
+    <a href="session2.html">S2</a>
+    <a href="session3.html">S3</a>
+    <a href="session4.html">S4</a>
+    <a href="session5.html">S5</a>
+    <a href="session6.html">S6</a>
+    -->
+  </nav>
+</header>
+
+<main class="deck">
+
+  <!-- 1 · TITLE -->
+  <section class="slide" data-title="Welcome">
+    <div class="slide-inner">
+      <div class="kicker">GARRAIO&nbsp;LLC&nbsp;·&nbsp;EMBEDDED&nbsp;COMPETITION</div>
+      <h1>Build a car that <span class="grad">learns to drive itself</span><br>on your own Linux.</h1>
+      <p class="lead frag" style="margin-top:1rem">Two weeks. Six sessions. You compile a custom Embedded Linux
+      image with Yocto, wire it to real motors and sensors on a Raspberry&nbsp;Pi / BeagleBone, then teach the
+      car to drive itself by <b>behavioral cloning</b> — the same <b>imitation learning</b> idea behind real
+      <b>self-driving cars</b>.</p>
+
+      <div class="frag" style="margin:1.6rem 0 .4rem">
+        <svg viewBox="0 0 900 150" width="100%" height="140" aria-hidden="true">
+          <defs>
+            <linearGradient id="road" x1="0" x2="1">
+              <stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#a855f7"/>
+            </linearGradient>
+          </defs>
+          <line x1="20" y1="110" x2="880" y2="110" stroke="url(#road)" stroke-width="3"/>
+          <line x1="20" y1="110" x2="880" y2="110" stroke="#a3e635" stroke-width="2"
+                stroke-dasharray="14 16" class="dash"/>
+          <g class="carmove">
+            <g transform="translate(0,0)">
+              <rect x="0" y="66" width="94" height="34" rx="10" fill="#101c3a" stroke="#22d3ee"/>
+              <rect x="20" y="50" width="46" height="24" rx="7" fill="#0e1730" stroke="#a855f7"/>
+              <g class="wheel spin-cw" style="--dur:.6s">
+                <circle cx="22" cy="104" r="12" fill="#0a1225" stroke="#a3e635" stroke-width="3"/>
+                <line x1="22" y1="94" x2="22" y2="114" stroke="#a3e635" stroke-width="2"/>
+                <line x1="12" y1="104" x2="32" y2="104" stroke="#a3e635" stroke-width="2"/>
+              </g>
+              <g class="wheel spin-cw" style="--dur:.6s">
+                <circle cx="72" cy="104" r="12" fill="#0a1225" stroke="#a3e635" stroke-width="3"/>
+                <line x1="72" y1="94" x2="72" y2="114" stroke="#a3e635" stroke-width="2"/>
+                <line x1="62" y1="104" x2="82" y2="104" stroke="#a3e635" stroke-width="2"/>
+              </g>
+              <circle cx="88" cy="80" r="4" fill="#fbbf24" class="pulse"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="kpis frag">
+        <div class="kpi"><b class="grad">6</b><span>4-hour sessions</span></div>
+        <div class="kpi"><b class="grad">2</b><span>boards: Pi &amp; BBB</span></div>
+        <div class="kpi"><b class="grad">1</b><span>car you teach to drive</span></div>
+        <div class="kpi"><b class="grad">∞</b><span>bragging rights</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · BIG IDEA -->
+  <section class="slide" data-title="The big idea">
+    <div class="slide-inner">
+      <span class="eyebrow">◆ The big idea</span>
+      <h2>No hand-coded rules — it learns by watching you drive</h2>
+      <p class="lead">You drive the car a few laps from your phone; it records what it <i>senses</i> and what
+      you <i>do</i>, then a tiny neural network learns to copy you. Three stages:</p>
+
+      <div class="pipe" style="margin-top:1.8rem">
+        <div class="stage frag"><h3>1 · Demonstrate</h3><p class="lead" style="font-size:.95rem">You drive.
+          Sensors + your actions are recorded together.</p></div>
+        <div class="arrow frag">➜</div>
+        <div class="stage frag"><h3>2 · Train</h3><p class="lead" style="font-size:.95rem">A laptop turns the
+          log into a tiny <code>.tflite</code> brain.</p></div>
+        <div class="arrow frag">➜</div>
+        <div class="stage frag"><h3>3 · Self-drive</h3><p class="lead" style="font-size:.95rem">The Pi runs the
+          model in real time and steers itself.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · MEET THE CAR -->
+  <section class="slide tight" data-title="Meet the car">
+    <div class="slide-inner">
+      <span class="eyebrow">◆ Meet the car</span>
+      <h2>Here's the machine you're going to build</h2>
+      <p class="lead">Every part below is <b>in the kit</b> and gets its own hands-on session.
+      Use the button to add parts one by one as I talk through them.</p>
+
+      <div class="assembly" style="margin-top:1rem">
+        <svg viewBox="0 0 560 380" width="100%" height="330" aria-hidden="true">
+          <text x="280" y="30" text-anchor="middle" fill="#93a4c0" font-family="var(--mono)" font-size="13">▲ front of car</text>
+
+          <!-- chassis -->
+          <g class="part p-chassis">
+            <rect x="100" y="80" width="360" height="240" rx="18" fill="#101c3a" stroke="#22d3ee" stroke-width="2"/>
+          </g>
+
+          <!-- wheels + motor stubs (4) -->
+          <g class="part p-wheel1">
+            <rect x="97" y="113" width="6" height="14" fill="#a855f7"/>
+            <circle cx="75" cy="120" r="22" fill="#0a1225" stroke="#a3e635" stroke-width="4"/>
+            <line x1="75" y1="103" x2="75" y2="137" stroke="#a3e635" stroke-width="2"/>
+          </g>
+          <g class="part p-wheel2">
+            <rect x="457" y="113" width="6" height="14" fill="#a855f7"/>
+            <circle cx="485" cy="120" r="22" fill="#0a1225" stroke="#a3e635" stroke-width="4"/>
+            <line x1="485" y1="103" x2="485" y2="137" stroke="#a3e635" stroke-width="2"/>
+          </g>
+          <g class="part p-wheel3">
+            <rect x="97" y="273" width="6" height="14" fill="#a855f7"/>
+            <circle cx="75" cy="280" r="22" fill="#0a1225" stroke="#a3e635" stroke-width="4"/>
+            <line x1="75" y1="263" x2="75" y2="297" stroke="#a3e635" stroke-width="2"/>
+          </g>
+          <g class="part p-wheel4">
+            <rect x="457" y="273" width="6" height="14" fill="#a855f7"/>
+            <circle cx="485" cy="280" r="22" fill="#0a1225" stroke="#a3e635" stroke-width="4"/>
+            <line x1="485" y1="263" x2="485" y2="297" stroke="#a3e635" stroke-width="2"/>
+          </g>
+
+          <!-- H-bridge (L298N) -->
+          <g class="part p-hb">
+            <rect x="115" y="258" width="110" height="48" rx="6" fill="#0e1730" stroke="#fb7185" stroke-width="2"/>
+            <text x="170" y="278" text-anchor="middle" fill="#fb7185" font-family="var(--mono)" font-size="11" font-weight="700">L298N</text>
+            <text x="170" y="293" text-anchor="middle" fill="#fb7185" font-family="var(--mono)" font-size="10">H-BRIDGE</text>
+          </g>
+
+          <!-- buck converter 3.3V -->
+          <g class="part p-buck">
+            <rect x="245" y="263" width="75" height="38" rx="4" fill="#0e1730" stroke="#22d3ee" stroke-width="2"/>
+            <text x="282" y="281" text-anchor="middle" fill="#22d3ee" font-family="var(--mono)" font-size="11" font-weight="700">BUCK</text>
+            <text x="282" y="294" text-anchor="middle" fill="#22d3ee" font-family="var(--mono)" font-size="10">3.3 V</text>
+          </g>
+
+          <!-- batteries -->
+          <g class="part p-bat">
+            <rect x="340" y="258" width="110" height="48" rx="6" fill="#0e1730" stroke="#fbbf24" stroke-width="2"/>
+            <rect x="345" y="263" width="4" height="38" fill="#fbbf24"/>
+            <text x="395" y="288" text-anchor="middle" fill="#fbbf24" font-family="var(--mono)" font-size="12" font-weight="700">BATTERIES</text>
+          </g>
+
+          <!-- RPi (main compute) -->
+          <g class="part p-rpi">
+            <rect x="190" y="145" width="180" height="70" rx="8" fill="#0e1730" stroke="#a3e635" stroke-width="2"/>
+            <text x="280" y="173" text-anchor="middle" fill="#a3e635" font-family="var(--mono)" font-size="15" font-weight="800">Raspberry Pi 4</text>
+            <text x="280" y="197" text-anchor="middle" fill="#93a4c0" font-family="var(--mono)" font-size="10">main compute · Linux</text>
+          </g>
+
+          <!-- MPU-6050 (IMU) — centred on the chassis -->
+          <g class="part p-mpu">
+            <rect x="258" y="224" width="44" height="30" rx="4" fill="#0e1730" stroke="#a855f7" stroke-width="2"/>
+            <text x="280" y="240" text-anchor="middle" fill="#a855f7" font-family="var(--mono)" font-size="10" font-weight="700">MPU</text>
+            <text x="280" y="251" text-anchor="middle" fill="#a855f7" font-family="var(--mono)" font-size="9">6050</text>
+          </g>
+
+          <!-- ultrasonics: front, left, right -->
+          <g class="part p-us1">
+            <text x="280" y="94" text-anchor="middle" fill="#22d3ee" font-family="var(--mono)" font-size="9">HC-SR04 · front</text>
+            <rect x="240" y="100" width="80" height="32" rx="4" fill="#0e1730" stroke="#22d3ee" stroke-width="2"/>
+            <circle cx="260" cy="116" r="8" fill="#0a1225" stroke="#22d3ee" stroke-width="1.5"/>
+            <circle cx="300" cy="116" r="8" fill="#0a1225" stroke="#22d3ee" stroke-width="1.5"/>
+          </g>
+          <g class="part p-us2">
+            <rect x="108" y="165" width="32" height="70" rx="4" fill="#0e1730" stroke="#22d3ee" stroke-width="2"/>
+            <circle cx="124" cy="182" r="7" fill="#0a1225" stroke="#22d3ee" stroke-width="1.5"/>
+            <circle cx="124" cy="218" r="7" fill="#0a1225" stroke="#22d3ee" stroke-width="1.5"/>
+            <text x="124" y="252" text-anchor="middle" fill="#22d3ee" font-family="var(--mono)" font-size="9">◀ left</text>
+          </g>
+          <g class="part p-us3">
+            <rect x="420" y="165" width="32" height="70" rx="4" fill="#0e1730" stroke="#22d3ee" stroke-width="2"/>
+            <circle cx="436" cy="182" r="7" fill="#0a1225" stroke="#22d3ee" stroke-width="1.5"/>
+            <circle cx="436" cy="218" r="7" fill="#0a1225" stroke="#22d3ee" stroke-width="1.5"/>
+            <text x="436" y="252" text-anchor="middle" fill="#22d3ee" font-family="var(--mono)" font-size="9">right ▶</text>
+          </g>
+        </svg>
+
+        <div class="asm-ctrl no-advance">
+          <button class="btn" id="asmReset">⟲ Reset</button>
+          <button class="btn primary" id="asmNext">▶ Start assembly</button>
+          <span class="mini" id="asmProg">0 / 10 installed</span>
+        </div>
+        <div class="note asm-cap" id="asmCaption" style="display:none">
+          <b id="asmTitle"></b> — <span id="asmDesc"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · ROADMAP -->
+  <section class="slide tight" data-title="Roadmap">
+    <div class="slide-inner">
+      <span class="eyebrow">◆ The roadmap</span>
+      <h2>Six sessions, one machine</h2>
+      <div class="grid g3" style="margin-top:1.2rem">
+        <a class="scard card hoverable frag" href="session1.html">
+          <div class="num">SESSION 01</div><div class="big">Boot</div>
+          <h3>Foundations &amp; the Build System</h3>
+          <p>Bare-metal vs Linux. What an OS image is, and how Yocto bakes one for your board.</p>
+          <span class="chip cyan">Yocto</span><span class="chip">kas</span><span class="chip">boot</span>
+        </a>
+        <a class="scard card hoverable frag" href="session2.html">
+          <div class="num">SESSION 02</div><div class="big">Stack</div>
+          <h3>Architecture &amp; Dependencies</h3>
+          <p>Layers of the image and the journey from your app down to a GPIO pin.</p>
+          <span class="chip violet">kernel</span><span class="chip">syscalls</span><span class="chip">layers</span>
+        </a>
+        <a class="scard card hoverable frag" href="session3.html">
+          <div class="num">SESSION 03</div><div class="big">Move</div>
+          <h3>Actuation</h3>
+          <p>Drive an H-bridge from Linux. PWM, duty cycle and making wheels spin.</p>
+          <span class="chip lime">GPIO</span><span class="chip">PWM</span><span class="chip">L298N</span>
+        </a>
+        <a class="scard card hoverable frag" href="session4.html">
+          <div class="num">SESSION 04</div><div class="big">Sense</div>
+          <h3>Sensing the World</h3>
+          <p>Ultrasonic distance, the IMU, and why timing on a non-real-time OS is tricky.</p>
+          <span class="chip cyan">HC-SR04</span><span class="chip">I²C</span><span class="chip">IMU</span>
+        </a>
+        <a class="scard card hoverable frag" href="session5.html">
+          <div class="num">SESSION 05</div><div class="big">Learn</div>
+          <h3>Integration, Testing &amp; Logging</h3>
+          <p>Record demos, train the model, deploy it, and read the logs when things break.</p>
+          <span class="chip violet">TFLite</span><span class="chip">logging</span><span class="chip">systemd</span>
+        </a>
+        <a class="scard card hoverable frag" href="session6.html">
+          <div class="num">SESSION 06</div><div class="big">Race</div>
+          <h3>Competition &amp; Evaluation</h3>
+          <p>Tune, benchmark, and race. Scored on efficiency and real-time accuracy.</p>
+          <span class="chip lime">race day</span><span class="chip">Q&amp;A</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · WHAT YOU GET -->
+  <section class="slide" data-title="What's in the kit">
+    <div class="slide-inner">
+      <span class="eyebrow">◆ What's in the kit</span>
+      <h2>What we provide, what you bring</h2>
+      <div class="grid g2" style="margin-top:1.2rem">
+        <div class="card frag">
+          <h3>Provided</h3>
+          <p>Car chassis, DC motors + L298N driver, ultrasonic sensors, MPU6050 IMU,
+          wiring, and this interactive courseware.</p>
+          <span class="chip">chassis</span><span class="chip">motors</span><span class="chip">sensors</span><span class="chip">IMU</span>
+        </div>
+        <div class="card frag">
+          <h3>You bring</h3>
+          <p>A Raspberry&nbsp;Pi or BeagleBone Black, a microSD card, a laptop, and curiosity.
+          Everything else we build together.</p>
+          <span class="chip cyan">Raspberry Pi</span><span class="chip violet">BeagleBone</span><span class="chip">laptop</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · LIVE DEMO -->
+  <section class="slide" data-title="Live demo">
+    <div class="slide-inner">
+      <span class="eyebrow">◆ Live demo · right now</span>
+      <h2>Let's see what we just talked about</h2>
+      <p class="lead">Before we build anything, I'll run the finished car in front of you — three quick beats:</p>
+      <div class="grid g3" style="margin-top:1.4rem">
+        <div class="card frag"><div class="num">01 · manual</div><h3>I drive it</h3>
+          <p>I steer the car by hand in manual mode so you see it move under human control.</p></div>
+        <div class="card frag"><div class="num">02 · data</div><h3>Show the data</h3>
+          <p>Then I show you the log it just recorded — sensor readings paired with my steering.</p></div>
+        <div class="card frag"><div class="num">03 · autonomous</div><h3>It drives itself</h3>
+          <p>Finally I switch to autonomous mode and it replicates the driving on its own.</p></div>
+      </div>
+      <div class="note tip frag" style="margin-top:1.2rem">We already trained and tested this model beforehand —
+      so today it's a <b>demo, not a training run</b>.</div>
+    </div>
+  </section>
+
+  <!-- 7 · HOW WE WORK -->
+  <section class="slide tight" data-title="How we work">
+    <div class="slide-inner">
+      <span class="eyebrow">◆ How we'll work together</span>
+      <h2>This is run like a real engineering team</h2>
+      <p class="lead">Not a lecture course — every session follows the same loop.</p>
+
+      <div class="sflow" style="margin-top:1.2rem">
+        <div class="step frag"><div class="n">STEP 01 · at home</div><h4>I give you keywords</h4>
+          <p>At the end of each session you leave with a short list of keywords to research.</p></div>
+        <div class="step frag"><div class="n">STEP 02 · at home</div><h4>You search</h4>
+          <p>You look them up — datasheets, docs, articles — and build your own understanding.</p></div>
+        <div class="step frag"><div class="n">STEP 03 · at home</div><h4>You prepare</h4>
+          <p>You put together what you found and get ready to explain it to the team.</p></div>
+        <div class="step you frag"><div class="n">STEP 04 · in the room</div><h4>You present</h4>
+          <p>You present; we discuss; I add the industry context — then we build it on the hardware.</p></div>
+      </div>
+
+      <div class="field frag" style="margin-top:1.2rem">
+        <span class="tag">🏭 From the field</span>
+        <h4>This mirrors how embedded teams actually operate</h4>
+        <p>In industry nobody hands you a finished answer. You get a problem and some keywords, you research the
+        datasheet and the kernel docs, you propose an approach, your peers challenge it in review, and only then
+        do you touch the hardware. That's the habit that makes you employable.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 · HOW YOU WIN -->
+  <section class="slide" data-title="How you win">
+    <div class="slide-inner">
+      <span class="eyebrow">◆ Race day · the rubric</span>
+      <h2>You're scored from day one — here's how</h2>
+      <p class="lead">The judges reward an <b>efficient, lightweight AI model</b> running on your own Linux and
+      <b>real-time navigation accuracy</b>. Four numbers decide the winner:</p>
+      <div class="grid g4" style="margin-top:1.4rem">
+        <div class="card frag"><div class="grad" style="font-size:2.6rem;font-weight:900;line-height:1">35%</div>
+          <h3>🎯 Accuracy</h3><p>Real-time navigation — stays on track and reacts correctly.</p></div>
+        <div class="card frag"><div class="grad" style="font-size:2.6rem;font-weight:900;line-height:1">25%</div>
+          <h3>⚡ Lap speed</h3><p>How fast you complete a clean lap.</p></div>
+        <div class="card frag"><div class="grad" style="font-size:2.6rem;font-weight:900;line-height:1">25%</div>
+          <h3>🪶 Efficiency</h3><p>A small, fast model — light on the edge hardware.</p></div>
+        <div class="card frag"><div class="grad" style="font-size:2.6rem;font-weight:900;line-height:1">15%</div>
+          <h3>🛠️ Robustness</h3><p>No crashes, no stalls — a DNF scores worst of all.</p></div>
+      </div>
+      <div class="note tip frag" style="margin-top:1.2rem">Keep your eyes on this from Session&nbsp;1. Every
+      choice — image size, loop timing, model shape — moves one of these numbers.</div>
+    </div>
+  </section>
+
+  <!-- 9 · START -->
+  <section class="slide" data-title="Start">
+    <div class="slide-inner" style="text-align:center">
+      <div class="kicker">READY?</div>
+      <h1>Let's build it.</h1>
+      <p class="lead frag" style="margin:1rem auto 0">Session&nbsp;1 starts with the build system — from bare
+      metal all the way to a custom Linux booting on your own board.</p>
+      <div class="hero-actions frag" style="justify-content:center;margin-top:1.8rem">
+        <a class="btn primary no-advance" href="session1.html">Start Session 1 →</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="brand" style="justify-content:center">
+      <span class="dot"></span> Code&nbsp;&amp;&nbsp;Drive — Level&nbsp;2
+    </div>
+    <p>Sponsored by Garraio, LLC · Led by professional embedded software engineers.</p>
+  </div>
+</footer>
+
+<style>
+  .carmove>g{animation:drive 7s cubic-bezier(.4,0,.3,1) infinite}
+  @keyframes drive{
+    0%{transform:translateX(20px)}
+    45%{transform:translateX(760px)}
+    50%{transform:translateX(760px)}
+    100%{transform:translateX(20px)}
+  }
+</style>
+<script src="assets/app.js"></script>
+<script>
+/* click-driven "meet the car" assembly */
+(function(){
+  var svg=document.querySelector(".assembly svg");
+  if(!svg) return;
+  var nextBtn=document.getElementById("asmNext");
+  var resetBtn=document.getElementById("asmReset");
+  var prog=document.getElementById("asmProg");
+  var cap=document.getElementById("asmCaption");
+  var capT=document.getElementById("asmTitle");
+  var capD=document.getElementById("asmDesc");
+  var order=[
+    {cls:["p-chassis"], title:"Chassis",
+     desc:"the frame everything else bolts onto."},
+    {cls:["p-wheel1","p-wheel2","p-wheel3","p-wheel4"], title:"4 wheels + DC motors",
+     desc:"each wheel driven by its own DC motor — spin the two sides at different speeds and the car turns (skid steering)."},
+    {cls:["p-bat"], title:"Battery pack",
+     desc:"a 7.4 V LiPo powers the whole car — motors directly, electronics via the buck below."},
+    {cls:["p-buck"], title:"Buck converter → 3.3 V",
+     desc:"steps battery voltage down to a clean 3.3 V rail for the Pi and the sensors."},
+    {cls:["p-hb"], title:"L298N H-bridge",
+     desc:"the power switch between a GPIO pin and a thirsty motor — direction control + PWM speed."},
+    {cls:["p-rpi"], title:"Raspberry Pi 4",
+     desc:"main compute; runs the custom Linux you'll build in Session 1 and the AI in Session 5."},
+    {cls:["p-mpu"], title:"MPU-6050 IMU",
+     desc:"accelerometer + gyroscope over I²C. Mounted at the car centre so it measures motion accurately."},
+    {cls:["p-us1"], title:"HC-SR04 · front",
+     desc:"ultrasonic distance sensor facing forward — how the car sees what's ahead."},
+    {cls:["p-us2"], title:"HC-SR04 · left",
+     desc:"same sensor pointing left — for obstacles on the side."},
+    {cls:["p-us3"], title:"HC-SR04 · right",
+     desc:"and one pointing right — full 3-direction awareness."}
+  ];
+  var idx=0;
+  function paint(){
+    order.forEach(function(step,i){
+      step.cls.forEach(function(c){
+        var el=svg.querySelector("."+c);
+        if(el) el.classList.toggle("show", i<idx);
+      });
+    });
+    prog.textContent=idx+" / "+order.length+" installed";
+    if(idx===0){
+      cap.style.display="none";
+      nextBtn.textContent="▶ Start assembly";
+      nextBtn.disabled=false;
+    } else {
+      cap.style.display="";
+      capT.textContent=order[idx-1].title;
+      capD.textContent=order[idx-1].desc;
+      if(idx>=order.length){
+        nextBtn.textContent="✓ Assembly complete";
+        nextBtn.disabled=true;
+      } else {
+        nextBtn.textContent="▶ Add next part";
+        nextBtn.disabled=false;
+      }
+    }
+  }
+  nextBtn.onclick=function(){ if(idx<order.length){ idx++; paint(); } };
+  resetBtn.onclick=function(){ idx=0; paint(); };
+  paint();
+})();
+</script>
+<script src="assets/deck.js"></script>
+</body>
+</html>

@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S1 · Foundations of Embedded Linux &amp; the Build System</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/deck.css">
+</head>
+<body>
+<div class="progress"></div>
+<header class="topbar">
+  <div class="brand"><span class="dot"></span> Code&nbsp;&amp;&nbsp;Drive <small>· Lvl 2</small></div>
+  <nav>
+    <a href="index.html">Home</a><a href="session1.html">S1</a>
+    <!-- PUBLISH: uncomment each tab here (and in every published page) as the session goes live
+    <a href="session2.html">S2</a>
+    <a href="session3.html">S3</a><a href="session4.html">S4</a><a href="session5.html">S5</a><a href="session6.html">S6</a>
+    -->
+  </nav>
+</header>
+
+<div class="wrap deck">
+
+  <section class="hero" style="min-height:78vh">
+    <div class="reveal">
+      <div class="kicker">SESSION 01 · 4 HOURS</div>
+      <h1>Foundations of <span class="grad">Embedded Linux</span><br>&amp; the Build System</h1>
+      <p class="lead reveal d1">By the end of today you'll know exactly what happens between pressing
+      <kbd>power</kbd> and your car's software running — and how a custom operating system for your
+      board is <b>baked</b> from source with Yocto.</p>
+      <div class="hero-actions reveal d2">
+        <a class="btn primary" href="#baremetal">Let's go →</a>
+        <a class="btn ghost" href="#lab">Jump to the lab</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- BARE METAL VS LINUX -->
+  <section id="baremetal">
+    <span class="eyebrow reveal">◆ Concept · the big architectural choice</span>
+    <h2 class="reveal">Three ways to run code on a chip</h2>
+    <div class="primer reveal">
+      <span class="eyebrow">◆ Words first</span>
+      <p class="plead">Five words we'll lean on — learn them <em>before</em> the concept:</p>
+      <dl>
+        <dt>Bare-metal</dt><dd>Running your code with <em>no</em> OS at all — your one program owns the whole
+          chip. <span class="lit">You do everything yourself.</span></dd>
+        <dt>Operating system (OS)</dt><dd>Software that manages the hardware and runs your programs for you.
+          Linux is one. <span class="lit">Think: the manager everyone reports to.</span></dd>
+        <dt>Kernel</dt><dd>The core of the OS that talks straight to the hardware and shares it between
+          programs. <span class="lit">The manager's brain.</span></dd>
+        <dt>Real-time</dt><dd>Guaranteeing an action happens within a strict deadline, every single time.
+          <span class="lit">RTOS &amp; bare-metal can promise this; Linux <b>cannot</b>.</span></dd>
+        <dt>RTOS (real-time OS)</dt><dd>A tiny OS (FreeRTOS, Zephyr, QNX) that schedules tasks with
+          <em>guaranteed</em> timing. <span class="lit">A strict manager who never misses a deadline.</span></dd>
+      </dl>
+    </div>
+
+    <h3 class="reveal d1" style="margin-top:1.6rem">The stack on each option — watch it grow</h3>
+    <p class="lead reveal d1">Same chip; three very different amounts of software running on it. Each brick
+    you stack up <b>gives you a feature</b> — and takes a little control and determinism away. Read every
+    column <b>bottom-up</b>, from the metal to your code.</p>
+
+    <div class="wstack reveal d1">
+      <div class="col baremetal">
+        <h3>🔩 Bare-metal</h3>
+        <div class="brick you"><div class="bt">Your application — high-level logic</div>
+          <div class="bd">while(1){ read_sensors(); if(clear) motor_forward(); }</div></div>
+        <div class="brick hal"><div class="bt">🎚️ HAL — device actions</div>
+          <div class="bd">motor_forward(), motor_stop() — say <i>what</i> to do, not which pin</div></div>
+        <div class="brick mcal"><div class="bt">🔧 MCAL — register access</div>
+          <div class="bd">motor_forward() → set_pin(IN1, HIGH): writes the GPIO registers</div></div>
+        <div class="brick metal"><div class="bt">🔌 The chip · metal</div>
+          <div class="bd">CPU + registers + memory-mapped IO</div></div>
+        <div class="verdict"><b>You get:</b> µs-tight timing, tiny binary, total control.<br>
+          <b>You pay:</b> no Wi-Fi, no multitasking, no filesystem, no Python — you write everything.</div>
+      </div>
+
+      <div class="col rtos">
+        <h3>⏱️ RTOS</h3>
+        <div class="brick you"><div class="bt">Your tasks</div>
+          <div class="bd">motor_task() · sensor_task() · comms_task()</div></div>
+        <div class="brick plus"><div class="bt">+ RTOS kernel — the one extra layer</div>
+          <div class="bd">pre-emptive scheduler, timers, IPC (FreeRTOS / Zephyr / QNX)</div></div>
+        <div class="brick hal"><div class="bt">🎚️ HAL — device actions</div>
+          <div class="bd">motor_forward(), motor_stop() — same semantic API</div></div>
+        <div class="brick mcal"><div class="bt">🔧 MCAL — register access</div>
+          <div class="bd">turns those actions into GPIO / timer register writes</div></div>
+        <div class="brick metal"><div class="bt">🔌 The chip · metal</div>
+          <div class="bd">CPU + registers + memory-mapped IO</div></div>
+        <div class="verdict"><b>You gain:</b> pre-emptive scheduling with <i>guaranteed</i> deadlines —
+          perfect for a braking or motor-control loop.<br>
+          <b>Still missing:</b> rich userspace — Python, TFLite, Wi-Fi, a dashboard are a huge lift.</div>
+      </div>
+
+      <div class="col linux">
+        <h3>🐧 Embedded Linux</h3>
+        <div class="brick you"><div class="bt">Your app · Python + TFLite</div>
+          <div class="bd">main.py — ~100 lines of readable code</div></div>
+        <div class="brick big"><div class="bt">+ User-space libraries</div>
+          <div class="bd">python3, tflite-runtime, libgpiod, smbus2</div></div>
+        <div class="brick big"><div class="bt">+ Init &amp; libc</div>
+          <div class="bd">systemd (PID 1), glibc, coreutils, ssh, journalctl</div></div>
+        <div class="brick big"><div class="bt">+ Linux kernel</div>
+          <div class="bd">scheduler, drivers, GPIO/I²C/USB, TCP/IP, filesystem</div></div>
+        <div class="brick plus"><div class="bt">+ Bootloader + device tree</div>
+          <div class="bd">U-Boot / Pi firmware · .dtb describes the board</div></div>
+        <div class="brick hal"><div class="bt">🎚️ HAL — kernel drivers &amp; pinctrl</div>
+          <div class="bd">device tree + drivers map registers to /dev names — Linux's HAL</div></div>
+        <div class="brick metal"><div class="bt">🔌 The chip · metal</div>
+          <div class="bd">CPU + registers + memory-mapped IO</div></div>
+        <div class="verdict"><b>You gain:</b> multitasking, drivers, Wi-Fi, TCP, Python, TFLite, a
+          filesystem — everything a rich AI app needs.<br>
+          <b>You pay:</b> a bigger image and no hard real-time guarantee — the scheduler can pause your
+          code for a moment.</div>
+      </div>
+    </div>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> Three ways to get around town: <b>bare-metal</b> is a go-kart — you push every pedal yourself, nothing between you and the wheels. <b>RTOS</b> is that same go-kart with a strict instructor who <i>guarantees</i> you brake in time. <b>Linux</b> is a comfy car with Wi-Fi, a screen and cruise control — powerful and clever, but it might pause for a heartbeat to take a phone call.</div>
+
+    <div class="deep reveal"><h4>So why does <em>our</em> car run Linux?</h4><p>Because its hard job isn't a
+      microsecond control loop — it's <b>running an AI model, streaming a dashboard over Wi-Fi, and logging
+      data</b>. That's exactly what a rich OS is good at. We accept Linux's one weakness — it's not
+      real-time — and <b>engineer around it</b>. A pure control
+      product might instead pick an RTOS; a self-learning, networked car picks Linux.</p></div>
+
+    <div class="field reveal">
+      <span class="tag">🏭 From the field</span>
+      <h4>This is literally the infotainment vs. safety split in a real car</h4>
+      <p>In production vehicles the <b>infotainment &amp; connectivity</b> domain — maps, media, the AI, the
+      network stack — runs <b>embedded Linux</b>, for exactly the reasons above. The <b>safety-critical</b>
+      domain — braking, steering, airbags — runs on an <b>RTOS or bare-metal</b> microcontroller where a
+      missed deadline is unacceptable. Same vehicle, two worlds, chosen by the real-time requirement. Our car
+      is an "infotainment-class" workload, so Linux is the professional choice.</p>
+    </div>
+  </section>
+
+  <!-- ARCHITECTURE MAP -->
+  <section id="arch">
+    <span class="eyebrow reveal">◆ The mental model for the whole course</span>
+    <h2 class="reveal">The car is a stack of layers — one per session</h2>
+    <p class="lead reveal d1">Hold this picture all week. A working robot is not one program — it's a
+    <b>stack</b>, each layer trusting the one below it. Every session opens or adds one layer. Let's walk it
+    <b>top-down</b>, from the thing you see (a car driving itself) all the way down to the metal, and mark
+    which session opens each floor.</p>
+
+    <div class="grid g2 reveal d1" style="margin-top:1rem;align-items:start">
+      <div class="card"><div class="num" style="color:var(--cyan)">TOP</div>
+        <h3>🧠 Application — the AI</h3>
+        <p>A small neural net reads sensor numbers and decides <i>forward, left, right or stop</i>. This is
+        the visible behaviour — what a spectator sees.</p>
+        <span class="chip cyan">opened in Session 5</span></div>
+      <div class="card"><div class="num">↓</div>
+        <h3>🎚️ Abstraction — sensor &amp; actuator APIs</h3>
+        <p>Small helper modules like <code>car.forward()</code> and <code>sensors.read()</code> that hide
+        the messy hardware details behind clean functions your AI can call.</p>
+        <span class="chip lime">opened in Sessions 3 &amp; 4</span></div>
+      <div class="card"><div class="num">↓</div>
+        <h3>📚 User-space libraries</h3>
+        <p>Off-the-shelf helpers we <code>import</code>: <code>libgpiod</code> for GPIOs, <code>smbus2</code>
+        for I²C to run the model. Someone else wrote them; we stack them in.</p>
+        <span class="chip violet">opened in Session 2</span></div>
+      <div class="card"><div class="num">↓</div>
+        <h3>🚪 System-call interface</h3>
+        <p>The one official doorway from your program into the kernel — <code>ioctl()</code> on files like
+        <code>/dev/gpiochip0</code>. This is where “asking politely” starts.</p>
+        <span class="chip violet">opened in Session 2</span></div>
+      <div class="card"><div class="num">↓</div>
+        <h3>⚙️ Linux kernel + subsystems</h3>
+        <p>The core OS that owns the hardware and shares it fairly. Its GPIO &amp; I²C subsystems route your
+        request to the right driver, and its scheduler decides when your code gets to run.</p>
+        <span class="chip violet">opened in Sessions 2, 3, 4</span></div>
+      <div class="card" style="border-color:rgba(34,211,238,.5);box-shadow:0 0 26px rgba(34,211,238,.15)">
+        <div class="num" style="color:var(--cyan)">◀ YOU ARE HERE</div>
+        <h3>🧱 Board support &amp; the image</h3>
+        <p>The bootloader, kernel config and device tree that tell Linux <i>which</i> hardware it's running
+        on — all packaged into one flashable image with your app inside. <b>This is today's floor.</b></p>
+        <span class="chip cyan">Session 1 — today</span></div>
+      <div class="card"><div class="num" style="color:var(--muted)">BOTTOM</div>
+        <h3>🔌 Hardware</h3>
+        <p>The Raspberry Pi (or BeagleBone), the L298N motor driver, the HC-SR04 ultrasonic sensor, the
+        MPU6050 IMU — the metal that actually moves.</p>
+        <span class="chip lime">wired up in Sessions 3 &amp; 4</span></div>
+    </div>
+
+    <p class="lead reveal d1" style="margin-top:1.4rem">Here's the same picture as a compact map — <b>this
+    exact map reappears in every session with “you are here” highlighted</b>, so you always know where
+    today's topic sits and what it depends on:</p>
+    <div class="archmap reveal d1">
+      <div class="lyr"><div><div class="t">🧠 Application — the AI</div>
+        <div class="s">features → model → action (imitation learning)</div></div>
+        <span class="badge">Session 5</span></div>
+      <div class="lyr"><div><div class="t">🎚️ Abstraction — drivers you call</div>
+        <div class="s">clean actuator &amp; sensor APIs your app uses</div></div>
+        <span class="badge">Sessions 3 · 4</span></div>
+      <div class="lyr"><div><div class="t">📚 User-space libraries</div>
+        <div class="s">libgpiod, smbus2, python, tflite-runtime</div></div>
+        <span class="badge">Session 2</span></div>
+      <div class="lyr"><div><div class="t">🚪 System-call interface</div>
+        <div class="s">ioctl() and the /dev files — userspace ↔ kernel</div></div>
+        <span class="badge">Session 2</span></div>
+      <div class="lyr"><div><div class="t">⚙️ Linux kernel + subsystems</div>
+        <div class="s">scheduler, GPIO &amp; I²C subsystems, drivers</div></div>
+        <span class="badge">Sessions 2 · 3 · 4</span></div>
+      <div class="lyr here"><div><div class="t">🧱 Board support &amp; the image</div>
+        <div class="s">bootloader, device tree, kernel config, rootfs</div></div>
+        <span class="badge">◀ Session 1 · you are here</span></div>
+      <div class="lyr"><div><div class="t">🔌 Hardware</div>
+        <div class="s">Pi / BBB, L298N H-bridge, HC-SR04, MPU6050, motors</div></div>
+        <span class="badge">Sessions 3 · 4</span></div>
+    </div>
+    <div class="note reveal" style="margin-top:1rem"><b>And wrapping all of it:</b> <b>Yocto + kas</b> is
+      the <i>factory</i> that builds every layer above into one flashable image. That factory is today's job
+      — get it right and every later session has solid ground to stand on.</div>
+  </section>
+
+  <!-- ANATOMY OF AN IMAGE -->
+  <section>
+    <span class="eyebrow reveal">◆ Anatomy</span>
+    <h2 class="reveal">What's actually on the SD card?</h2>
+
+    <div class="deep reveal"><h4>First — how did your code boot on the TivaC?</h4><p>On a bare-metal
+      microcontroller like the <b>TivaC</b>, power-on was simple: the chip's <b>ROM boot sequence</b> read the
+      reset vector and jumped straight into <code>main()</code>, flashed at a fixed address. One program owned
+      the chip — no OS, no filesystem, no "boot" to speak of. A Linux board <i>cannot</i> start like that:
+      there's an entire operating system to load and configure first. So the SD card doesn't hold "your
+      program" — it holds <b>four stacked ingredients</b>, and booting is each one handing off to the next.</p></div>
+
+    <p class="lead reveal d1">Read the stack bottom-up — the order they hand control over at boot:</p>
+    <div class="stack reveal d2" style="margin-top:1.2rem">
+      <div class="layer"><div><div class="t">① Bootloader / firmware</div>
+        <div class="s">Pi GPU firmware or U-Boot — the first code that runs, loads the kernel</div></div>
+        <span class="chip cyan">first</span></div>
+      <div class="layer"><div><div class="t">② Linux kernel + device tree</div>
+        <div class="s">The OS core, plus a <code>.dtb</code> that describes your board's hardware</div></div>
+        <span class="chip violet">core</span></div>
+      <div class="layer"><div><div class="t">③ Root filesystem (rootfs)</div>
+        <div class="s">C library, BusyBox/coreutils, Python, systemd… the whole userspace</div></div>
+        <span class="chip lime">userspace</span></div>
+      <div class="layer"><div><div class="t">④ Your application</div>
+        <div class="s"><code>/usr/share/car-training</code> + a systemd service that autostarts it</div></div>
+        <span class="chip">you</span></div>
+    </div>
+
+    <!-- ① BOOTLOADER -->
+    <h3 class="reveal" style="margin-top:1.8rem">① The bootloader — what replaces TivaC's ROM jump</h3>
+    <div class="grid g2 reveal d1" style="margin-top:.8rem;align-items:start">
+      <div class="card">
+        <p>The SoC's tiny ROM can't start Linux directly — the kernel is compressed, large, and needs RAM
+        configured first. So the ROM loads a small program whose only job is to <b>prepare the machine and
+        load the kernel</b>: the bootloader.</p>
+        <p><b>On the Raspberry Pi</b> that role is played by the GPU firmware
+        (<code>bootcode.bin</code> → <code>start.elf</code>). <b>On the BeagleBone</b> it's <b>U-Boot</b>, the
+        industry-standard open-source bootloader you'll meet on almost every embedded Linux board.</p>
+      </div>
+      <div class="card">
+        <span class="eyebrow">◆ What a bootloader does, in order</span>
+        <ol class="steps">
+          <li>Initialise RAM, clocks and the boot device</li>
+          <li>Read its config — which kernel, which device tree, what boot arguments</li>
+          <li>Copy the kernel image + <code>.dtb</code> into memory</li>
+          <li>Jump to the kernel's entry point — then step aside for good</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> Turning the board on is like waking a sleepy giant. A tiny built-in reflex opens one eye and finds the SD card; the <b>bootloader</b> is the strong coffee that actually gets the giant (Linux) up on its feet.</div>
+
+    <!-- ② KERNEL + DEVICE TREE -->
+    <h3 class="reveal" style="margin-top:1.6rem">② The kernel — and the device tree that describes your board</h3>
+    <p class="lead reveal d1">One Linux kernel binary runs on <i>thousands</i> of different boards. It can't
+    hard-code "GPIO lives at address 0x7E200000" — that's true on a Pi and false on a BeagleBone. So the
+    board's hardware is described <b>separately</b>, in a <b>device tree</b>.</p>
+    <div class="grid g2 reveal d1" style="margin-top:.8rem;align-items:start">
+      <div class="card">
+        <span class="eyebrow">◆ What is a device tree?</span>
+        <p>A <b>device tree</b> is a text file (<code>.dts</code>) that lists every piece of hardware on the
+        board — CPUs, memory, I²C buses, GPIO controllers — and where each one lives in memory. It compiles
+        to a binary blob (<code>.dtb</code>) that ships next to the kernel. At boot the kernel <i>reads</i> it
+        and loads the matching drivers. Same kernel, different <code>.dtb</code> → different board.</p>
+      </div>
+      <div class="card">
+        <span class="eyebrow">◆ A device tree is literally a tree</span>
+<pre class="code">/ <span class="cm">(root node)</span>
+├─ cpus/ .......... 4× Cortex-A72
+├─ memory@0 ....... 4 GB
+├─ soc/
+│  ├─ i2c@7e804000  { status = "okay"; }   <span class="cm">→ /dev/i2c-1</span>
+│  ├─ gpio@7e200000 { ... }                <span class="cm">→ /dev/gpiochip0</span>
+│  └─ usb@7e980000  { ... }
+└─ chosen { bootargs = "console=ttyS0"; }</pre>
+      </div>
+    </div>
+    <div class="note tip reveal">Each <i>enabled</i> node becomes a device file the kernel exposes — the very
+      <code>/dev/*</code> entries Session&nbsp;2 will open. Want to switch a pin's function or turn on a sensor
+      bus? You edit the <b>device tree</b> (or a small overlay), not the kernel source. It's the board's
+      wiring diagram, in text.</div>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> The kernel is one skilled worker who can work in <i>any</i> factory. The <b>device tree</b> is the map of <i>this</i> factory — which machine sits where — so the worker finds everything without being rebuilt for each new building.</div>
+
+    <!-- ③ ROOTFS -->
+    <h3 class="reveal" style="margin-top:1.6rem">③ The root filesystem — everything Linux calls "userspace"</h3>
+    <p class="lead reveal d1">The kernel on its own does nothing useful — it needs programs to run. The
+    <b>rootfs</b> is the whole directory tree mounted at <code>/</code>: the C library, shell utilities,
+    Python, systemd, and finally your app. <b>Why bake our own instead of grabbing Ubuntu?</b> So it holds
+    <i>exactly</i> what the car needs and nothing else — small, fast to boot, and reproducible byte-for-byte.</p>
+    <div class="grid g2 reveal d1" style="margin-top:.8rem;align-items:start">
+      <div class="card">
+        <span class="eyebrow">◆ Inside the rootfs</span>
+<pre class="code">/
+├─ bin/  sbin/    <span class="cm"># BusyBox / coreutils: ls, cp, mount…</span>
+├─ lib/           <span class="cm"># glibc — the C library everything links to</span>
+├─ usr/bin/python3        <span class="cm"># the Python that runs the AI</span>
+├─ usr/share/car-training/ <span class="cm"># ← our app lives here</span>
+├─ etc/systemd/   <span class="cm"># services, incl. car-training.service</span>
+└─ dev/ proc/ sys/ <span class="cm"># kernel-provided, filled in at boot</span></pre>
+      </div>
+      <div class="card">
+        <span class="eyebrow">◆ Ours vs a desktop</span>
+        <p>Desktop Ubuntu's rootfs is <b>gigabytes</b> — thousands of packages you'll never touch. Ours is a
+        few dozen <b>megabytes</b>: every single file is present because a recipe put it there on purpose.</p>
+        <p>That's the whole promise of Yocto — you don't <i>trim down</i> a distro, you <i>build up</i>
+        exactly the one you need.</p>
+      </div>
+    </div>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> The <b>rootfs</b> is the toy box holding every tool and program the system can use. A desktop ships a giant box crammed with toys you'll never touch; we pack a tiny box with only the toys our car actually plays with.</div>
+
+    <!-- ④ APP -->
+    <h3 class="reveal" style="margin-top:1.6rem">④ Your application — the only part that's truly "yours"</h3>
+    <div class="grid g2 reveal d1" style="margin-top:.8rem;align-items:start">
+      <div class="card">
+        <p>Everything below this layer was written by someone else. Your entire contribution is a handful of
+        files dropped into the rootfs: the Python app under <code>/usr/share/car-training/</code> and a
+        <b>systemd service</b> that launches it automatically on boot.</p>
+        <p>That service is the bridge from "the OS finished booting" to "the car is driving": PID&nbsp;1
+        (systemd) reads it and runs your <code>main.py</code>.</p>
+      </div>
+      <div class="card">
+        <span class="eyebrow">◆ Where your app sits at runtime</span>
+<pre class="code">systemd <span class="cm">(PID 1)</span>
+  └─ starts car-training.service
+       └─ /usr/bin/python3
+            └─ /usr/share/car-training/main.py
+                 └─ read sensors → model → drive motors</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- UNDERSTAND THE BOOT CHAIN -->
+  <section id="bootchain">
+    <span class="eyebrow reveal">◆ Put the ingredients in motion</span>
+    <h2 class="reveal">The full boot chain, stage by stage</h2>
+    <p class="lead reveal d1">You now know the four ingredients — so the boot sequence reads like a story.
+    “It just boots” actually hides six distinct handoffs, each ingredient starting the next. Knowing them is
+    the difference between guessing and debugging when the board shows a black screen.</p>
+
+    <div class="grid g2 reveal d2" style="margin-top:1.2rem;align-items:start">
+      <div>
+        <ol class="steps">
+          <li><b>Power-on / ROM code.</b> A tiny program burned into the SoC runs first — the same idea as
+            the TivaC's reset vector, just smarter. It knows only enough to find the boot device (SD card)
+            and load the next stage. You cannot change it.</li>
+          <li><b>Bootloader.</b> On the Pi it's the GPU firmware (<code>bootcode.bin</code>→<code>start.elf</code>);
+            on BeagleBone it's <b>U-Boot</b>. Its job: initialise RAM, read config, load the kernel + device
+            tree into memory, and jump to the kernel.</li>
+          <li><b>Kernel + device tree.</b> Linux decompresses and takes over. It reads the
+            <code>.dtb</code> to learn what hardware exists, then brings up drivers, memory management and
+            the scheduler.</li>
+          <li><b>initramfs (optional).</b> A tiny in-RAM filesystem that can run early setup — e.g. mounting
+            an encrypted or network root. Our simple images often skip it.</li>
+          <li><b>Mount root filesystem.</b> The kernel mounts the real rootfs (the big partition) as
+            <code>/</code>, then executes the first userspace process, <b>PID&nbsp;1</b>.</li>
+          <li><b>init = systemd.</b> PID&nbsp;1 is <code>systemd</code>. It brings the system up target by
+            target and finally starts <b>your</b> <code>car-training.service</code>.</li>
+        </ol>
+      </div>
+      <div class="card" style="position:sticky;top:80px">
+        <span class="eyebrow">◆ Mental hook</span>
+        <p class="lead" style="font-size:1rem;margin-top:.6rem">Each stage only knows enough to start the
+        next one. It's a relay race: <b>ROM → bootloader → kernel → init → your app</b>. If the car never
+        reaches the dashboard, ask <i>“which baton was dropped?”</i></p>
+        <div class="deep">
+          <h4>Where problems show up</h4>
+          <p class="mini">No lights at all → power/ROM. Rainbow screen forever (Pi) → firmware can't find the
+          kernel. Kernel panic → bad rootfs or missing driver. Boots but no app → your service failed
+          (check <code>journalctl</code>).</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="deep reveal">
+      <h4>systemd targets — the "runlevels" of modern Linux</h4>
+      <p>systemd boots by reaching <b>targets</b>, each pulling in the units it needs:</p>
+      <table class="data">
+        <tr><th>Target</th><th>Meaning</th><th>Analogy</th></tr>
+        <tr><td><code>basic.target</code></td><td>Filesystems, sockets, early services up</td><td>Engine idling</td></tr>
+        <tr><td><code>network-online.target</code></td><td>Wi-Fi has an IP address</td><td>Radio connected</td></tr>
+        <tr><td><code>multi-user.target</code></td><td>Full multi-user system, logins ready</td><td>Ready to drive</td></tr>
+      </table>
+      <p class="mini" style="margin-top:.6rem">Our service declares <code>After=network-online.target</code>
+      and <code>WantedBy=multi-user.target</code> so the dashboard only starts once Wi-Fi is up.</p>
+    </div>
+  </section>
+
+  <!-- WHAT IS YOCTO -->
+  <section id="yocto">
+    <span class="eyebrow reveal">◆ The factory</span>
+    <h2 class="reveal">What is Yocto — and why build a whole OS from source?</h2>
+    <p class="lead reveal d1">We never downloaded a finished operating system for the car. We <b>build</b>
+    one, from source, tailored to our exact board. The tool that does that is <b>Yocto</b> — think of it as
+    a factory that assembles a custom Linux distribution out of recipes.</p>
+
+    <div class="grid g2 reveal d1" style="margin-top:1rem;align-items:start">
+      <div class="card">
+        <span class="eyebrow">◆ What Yocto actually is</span>
+        <p>Not a Linux distro you install — a <b>build system</b>. You describe what you want (which kernel,
+        which libraries, your app) in text files, and Yocto compiles the whole thing from source into one
+        flashable image. The same inputs always produce the same image, on any machine.</p>
+      </div>
+      <div class="card">
+        <span class="eyebrow">◆ Why Yocto for embedded</span>
+        <ul>
+          <li><b>Tiny</b> — only the packages the car needs, measured in MB not GB.</li>
+          <li><b>Reproducible</b> — anyone rebuilds the identical image, bit for bit.</li>
+          <li><b>Tailored</b> — the exact kernel drivers and device tree for our board.</li>
+          <li><b>Industry standard</b> — the same tool shipping real products at real companies.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> You don't buy a ready-made cake (that's Ubuntu). <b>Yocto</b> is your kitchen: you pick the exact ingredients and bake a cake that's precisely the size and flavour your car needs — no waste, nothing you didn't ask for.</div>
+
+    <div class="primer reveal">
+      <span class="eyebrow">◆ Words first</span>
+      <p class="plead">Yocto comes with its own vocabulary. Five words unlock everything that follows:</p>
+      <dl>
+        <dt>Image</dt><dd>The finished, flashable operating system — the single file you write to the SD
+          card. <span class="lit">The cake we're baking.</span></dd>
+        <dt>Recipe <code>.bb</code></dt><dd>A text file with instructions to build one ingredient (the kernel,
+          Python, our app). <span class="lit">One recipe card per ingredient.</span></dd>
+        <dt>Layer <code>meta-*</code></dt><dd>A folder (a Git repo) that groups related recipes.
+          <span class="lit">A shelf of recipe cards you stack in.</span></dd>
+        <dt>BitBake</dt><dd>The engine that reads the recipes and actually does the building.
+          <span class="lit">The oven.</span></dd>
+        <dt>Upstream / downstream</dt><dd><b>Upstream</b> = the original project someone else maintains that we
+          build <em>on top of</em> (poky, meta-raspberrypi). <b>Downstream</b> = us, further along, consuming
+          their work. <span class="lit">Water flows from upstream → to you, downstream.</span></dd>
+      </dl>
+    </div>
+
+    <h3 class="reveal" style="margin-top:1.6rem">What BitBake actually does — the five-task pipeline</h3>
+    <p class="lead reveal d1">BitBake builds every ingredient by running the <b>same five tasks, in order</b>.
+    A full image is thousands of these, but each recipe walks the identical pipeline:</p>
+    <ol class="steps reveal d1" style="margin-top:.6rem">
+      <li><b><code>do_fetch</code> — get the source.</b> Download this ingredient's code (git clone or
+        tarball) into the build tree.</li>
+      <li><b><code>do_configure</code> — set it up.</b> Run the project's configure step so it targets our
+        board and options (think <code>./configure</code> or cmake).</li>
+      <li><b><code>do_compile</code> — build it.</b> Compile the source into binaries for the board's ARM CPU.</li>
+      <li><b><code>do_install</code> — lay out the files.</b> Copy the built binaries, libraries and configs
+        into the exact paths they'll occupy on the rootfs (a staging directory).</li>
+      <li><b><code>do_package</code> — wrap it up.</b> Split the result into installable packages that get
+        assembled, alongside every other recipe's, into the final image.</li>
+    </ol>
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> Building one ingredient is like making the same sandwich every time: <b>fetch</b> the bread, <b>configure</b> = lay it out, <b>compile</b> = toast it, <b>install</b> = plate it, <b>package</b> = wrap it to go. Every recipe walks the identical five moves.</div>
+
+    <div class="note tip reveal">Every task's output is cached (<code>sstate</code>). Change one recipe and
+      BitBake re-runs only the tasks downstream of the change — which is why the second build is minutes, not
+      hours.</div>
+  </section>
+
+  <!-- WITHOUT KAS vs WITH KAS -->
+  <section id="kas">
+    <span class="eyebrow reveal">◆ Why we use kas · not just “how”</span>
+    <h2 class="reveal">Do it the hard way once — then let kas do it for you</h2>
+    <p class="lead reveal d1">BitBake alone <b>works</b>. It just needs you to babysit a lot of little
+    setup steps every single time — clone each layer at the right branch, source an environment script,
+    write two config files by hand, and add every layer to the build. Miss a step, get a cryptic error.
+    <b>kas</b> is a thin YAML front-end that does the exact same steps for you. Look at both sides side
+    by side and the point of kas becomes obvious.</p>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> Doing it by hand is reciting a six-step recipe from memory <i>every single time</i> — miss one step and dinner's ruined. <b>kas</b> writes the recipe on one card; hand the card to anyone and they make the exact same dish.</div>
+
+    <div class="grid g2 reveal d2" style="margin-top:1.2rem;align-items:start">
+      <div class="card">
+        <h3>🛠️ Without kas — the manual dance</h3>
+        <p class="mini">Everything you'd type in a terminal to reach one <code>bitbake</code>:</p>
+<pre class="code"><span class="cm"># 1) clone every layer at the same branch (typo = mystery error)</span>
+mkdir -p ~/yocto &amp;&amp; cd ~/yocto
+git clone -b scarthgap https://git.yoctoproject.org/poky
+git clone -b scarthgap https://git.openembedded.org/meta-openembedded
+git clone -b scarthgap https://git.yoctoproject.org/meta-raspberrypi
+git clone &lt;course-repo&gt;/meta-car-training
+
+<span class="cm"># 2) initialise the build tree (sets PATH, creates build/)</span>
+source poky/oe-init-build-env build
+
+<span class="cm"># 3) register every layer with BitBake, in order</span>
+bitbake-layers add-layer ../meta-openembedded/meta-oe
+bitbake-layers add-layer ../meta-openembedded/meta-python
+bitbake-layers add-layer ../meta-raspberrypi
+bitbake-layers add-layer ../meta-car-training
+
+<span class="cm"># 4) edit build/conf/local.conf by hand: MACHINE, DISTRO,</span>
+<span class="cm">#    INIT_MANAGER, IMAGE_FSTYPES, EXTRA_IMAGE_FEATURES…</span>
+vim conf/local.conf
+
+<span class="cm"># 5) finally start the build</span>
+bitbake core-image-car-training</pre>
+        <div class="pitfall" style="margin-top:.8rem"><b>The pain:</b> six manual steps, three files to
+          keep in sync, and a teammate who wants to reproduce your build has to hear you explain all of
+          the above. Version drift is guaranteed.</div>
+      </div>
+
+      <div class="card">
+        <h3>✨ With kas — one file, one command</h3>
+        <p class="mini">The <b>same</b> steps, but declared once in YAML and executed for you:</p>
+<pre class="code"><span class="cm"># yocto/kas-raspberrypi4.yml — the entire recipe for the build</span>
+<span class="kw">machine</span>: raspberrypi4-64
+<span class="kw">distro</span>: poky
+<span class="kw">target</span>: core-image-car-training
+
+<span class="kw">repos</span>:
+  poky:
+    url: https://git.yoctoproject.org/poky
+    branch: scarthgap
+  meta-openembedded:
+    url: https://git.openembedded.org/meta-openembedded
+    branch: scarthgap
+    layers: {meta-oe: , meta-python: }
+  meta-raspberrypi:
+    url: https://git.yoctoproject.org/meta-raspberrypi
+    branch: scarthgap
+  meta-car-training:
+    path: meta-car-training
+
+<span class="kw">local_conf_header</span>:
+  car: |
+    INIT_MANAGER = "systemd"
+    IMAGE_FSTYPES = "wic.bz2"</pre>
+<pre class="code" style="margin-top:.7rem"><span class="cm"># then, forever after — one line:</span>
+<span class="kw">$</span> kas build yocto/kas-raspberrypi4.yml</pre>
+        <div class="win" style="margin-top:.8rem"><b>The win:</b> the YAML <b>is</b> the build. Anyone in
+          the world runs one command and gets your exact image — no README, no tribal knowledge. That's
+          the <i>reproducibility</i> professional Yocto projects live on.</div>
+      </div>
+    </div>
+
+    <div class="deep reveal" style="margin-top:1rem"><h4>What kas actually does under the hood</h4>
+      <p>Nothing magic. When you run <code>kas build</code> it (1) <code>git clone</code>s every repo in
+      <code>repos:</code> at the exact branch/commit you asked for, (2) runs <code>source
+      oe-init-build-env</code>, (3) generates <code>bblayers.conf</code> from the layer list, (4) appends
+      your <code>local_conf_header</code> into <code>local.conf</code>, and (5) invokes <code>bitbake
+      $target</code>. Exactly the manual dance on the left — automated and version-locked.</p></div>
+    <div class="field reveal">
+      <span class="tag">🏭 From the field</span>
+      <h4>Every serious embedded team uses a front-end like this</h4>
+      <p>In production a real team never runs raw <code>bitbake</code> from a wiki README. They use
+      <b>kas</b>, or a similar tool (<code>repo</code>, <code>tanuki</code>), for exactly the reproducibility
+      reason above. Learn kas here and it maps straight onto a professional Yocto workflow.</p>
+    </div>
+  </section>
+
+  <!-- LAB: YOCTO IMAGE BAKER -->
+  <section id="lab">
+    <span class="eyebrow reveal">◆ Interactive lab</span>
+    <h2 class="reveal">Bake your own image 🍰</h2>
+    <p class="lead reveal d1">Now bake one yourself — the same <code>kas build</code> from the last slide,
+    made interactive. Toggle the layers you need, then hit <b>Bake</b>. Miss a required layer and the build
+    complains — just like the real thing.</p>
+
+    <div class="grid g2 reveal d2" style="margin-top:1.2rem">
+      <div class="card">
+        <h3>Choose your layers</h3>
+        <div id="layers"></div>
+        <button class="btn primary" id="bake" style="margin-top:1rem">⚙️ Bake image</button>
+      </div>
+      <div class="card">
+        <div class="term" style="box-shadow:none">
+          <div class="bar"><i></i><i></i><i></i><span>kas build kas-raspberrypi4.yml</span></div>
+          <div class="body" id="bakeout"><span class="m">Toggle layers and press Bake…</span></div>
+        </div>
+        <div id="artifact" style="margin-top:1rem"></div>
+      </div>
+    </div>
+    <div class="note reveal"><b>Real command:</b> <code>kas build yocto/kas-raspberrypi4.yml</code> — kas
+      clones the layers, then BitBake runs thousands of tasks to produce
+      <code>core-image-car-training-*.wic.bz2</code> which you flash to the SD card.</div>
+  </section>
+
+  <!-- YOCTO MENTAL MODEL -->
+  <section>
+    <span class="eyebrow reveal">◆ Deep dive</span>
+    <h2 class="reveal">Four more words that unlock the deeper mental model</h2>
+    <p class="lead reveal d1">You already met <i>image</i>, <i>recipe</i>, <i>layer</i>, <i>BitBake</i> and
+    <i>upstream/downstream</i> in the primer earlier. Four more terms unlock everything else Yocto does behind
+    the scenes — <b>the ones you'll hear a senior engineer say out loud</b>:</p>
+
+    <dl class="gloss card reveal d1" style="margin-top:1rem">
+      <dt>Task</dt><dd>One step of the five-task pipeline inside a recipe (<code>do_fetch</code> →
+        <code>do_configure</code> → <code>do_compile</code> → <code>do_install</code> →
+        <code>do_package</code>). BitBake runs them in dependency order — thousands of them for a full image.</dd>
+      <dt>Machine</dt><dd>The target hardware, e.g. <code>raspberrypi4-64</code> or
+        <code>beaglebone-yocto</code>. It selects the kernel, bootloader and device tree.</dd>
+      <dt>Distro</dt><dd>Global policy: init system, libc, features. We use <code>poky</code> tuned to
+        <code>systemd</code>.</dd>
+      <dt>sstate cache</dt><dd>Yocto caches every task's output. Change one recipe and only <i>that</i>
+        branch rebuilds — which is why the second build is far faster than the first.</dd>
+    </dl>
+
+    <div class="deep reveal">
+      <h4>Why build from source at all?</h4>
+      <p>Because an embedded image must be <b>tiny, reproducible and tailored</b>. A desktop Ubuntu is
+      gigabytes of stuff your car will never use. Yocto lets you include <i>exactly</i> the kernel drivers,
+      libraries and files you need — nothing more — and rebuild the identical image on any machine, any
+      time. That reproducibility is gold in a competition and in industry.</p>
+    </div>
+  </section>
+
+  <!-- WHERE LAYERS COME FROM -->
+  <section>
+    <span class="eyebrow reveal">◆ Deep dive</span>
+    <h2 class="reveal">Where do these layers actually come from?</h2>
+    <p class="lead reveal d1">“Layer” sounds abstract. It isn't — <b>a layer is just a Git repository full of
+    text files</b> (recipes and config). Here's where each one really lives on the internet:</p>
+
+    <div class="card reveal d1" style="margin-top:1rem">
+      <table class="data">
+        <tr><th>Layer</th><th>Maintained by</th><th>Origin (git URL)</th><th>Gives us…</th></tr>
+        <tr><td><code>poky</code></td><td>The Yocto Project</td>
+          <td><code>git.yoctoproject.org/poky</code></td><td>BitBake + core metadata &amp; distro</td></tr>
+        <tr><td><code>meta-raspberrypi</code></td><td>Community</td>
+          <td><code>github.com/agherzan/meta-raspberrypi</code></td><td>Pi kernel, firmware, device trees</td></tr>
+        <tr><td><code>meta-openembedded</code></td><td>OpenEmbedded</td>
+          <td><code>github.com/openembedded/meta-openembedded</code></td><td>Python, libgpiod, smbus2, numpy…</td></tr>
+        <tr><td><code>meta-car-training</code></td><td><b>us — this course</b></td>
+          <td>in the course repo</td><td>the car app + its systemd service</td></tr>
+      </table>
+    </div>
+
+    <p class="lead reveal d1" style="margin-top:1.2rem">When you run <code>kas build</code>, kas reads those
+    URLs from the <code>.yml</code> and <code>git clone</code>s each layer next to the others. Afterwards your
+    disk looks like this — every layer is a plain folder you can <code>cd</code> into and read:</p>
+    <div class="term reveal d1" style="margin-top:1rem"><div class="bar"><i></i><i></i><i></i>
+      <span>tree -L 1  (after kas checks out the layers)</span></div>
+      <div class="body"><span class="c">~/SummerTraining/build/layers/</span>
+<span class="m">├─</span> <span class="v">poky/</span>                <span class="m"># bitbake/ + meta/ + meta-poky/  ← from git.yoctoproject.org</span>
+<span class="m">├─</span> <span class="v">meta-raspberrypi/</span>    <span class="m"># the Pi BSP layer          ← from github.com/agherzan</span>
+<span class="m">├─</span> <span class="v">meta-openembedded/</span>   <span class="m"># meta-oe, meta-python…     ← from github.com/openembedded</span>
+<span class="m">└─</span> <span class="v">meta-car-training/</span>   <span class="m"># ← the ONLY one we wrote</span>
+    <span class="m">├─</span> conf/layer.conf
+    <span class="m">├─</span> recipes-car/car-training-app_1.0.bb
+    <span class="m">└─</span> recipes-car/files/app/main.py …</div></div>
+
+    <p class="lead reveal d1" style="margin-top:1.4rem">Why is each one <b>required</b>? Pull one out and the
+    build breaks in a specific, predictable way:</p>
+    <div class="grid g2 reveal d1" style="margin-top:.8rem">
+      <div class="pitfall"><b>Remove <code>poky</code></b> → no BitBake, no kernel, no C library. It's the
+        ground everything stands on — nothing builds at all.</div>
+      <div class="pitfall"><b>Remove <code>meta-raspberrypi</code></b> → no Pi kernel, firmware or device tree.
+        The image might build but it will <i>never boot</i> on the board.</div>
+      <div class="pitfall"><b>Remove <code>meta-openembedded</code></b> → no <code>python3-gpiod</code> /
+        <code>smbus2</code>. BitBake stops with <code>Nothing RPROVIDES</code> because our app's runtime deps
+        can't be found.</div>
+      <div class="pitfall"><b>Remove <code>meta-car-training</code></b> → the OS boots perfectly… to an empty
+        prompt. There's simply no car app on it. That's <i>our</i> layer.</div>
+    </div>
+    <div class="note tip reveal">Three of the four layers are downloaded unchanged from the internet. The
+      <b>only</b> code that is truly ours is <code>meta-car-training</code>. Standing on giants' shoulders is
+      the entire point of Yocto.</div>
+  </section>
+
+  <!-- HOW LAYERS LINK -->
+  <section>
+    <span class="eyebrow reveal">◆ Deep dive</span>
+    <h2 class="reveal">How the layers link together</h2>
+    <p class="lead reveal d1">Cloning the folders isn't enough — BitBake has to be <i>told</i> which layers
+    exist and in what order. Exactly two files do the linking.</p>
+
+    <div class="grid g2 reveal d1" style="margin-top:1rem;align-items:start">
+      <div class="card">
+        <h3>① <code>bblayers.conf</code> — the master list</h3>
+        <p>One variable, <code>BBLAYERS</code>, is an ordered list of every layer path BitBake should read.
+        kas writes this for you from the <code>.yml</code>:</p>
+        <pre class="code"><span class="cm"># build/conf/bblayers.conf  (generated by kas)</span>
+<span class="kw">BBLAYERS</span> = <span class="st">"</span>
+  <span class="st">${TOPDIR}/layers/poky/meta</span>
+  <span class="st">${TOPDIR}/layers/poky/meta-poky</span>
+  <span class="st">${TOPDIR}/layers/meta-raspberrypi</span>
+  <span class="st">${TOPDIR}/layers/meta-openembedded/meta-oe</span>
+  <span class="st">${TOPDIR}/layers/meta-openembedded/meta-python</span>
+  <span class="st">${TOPDIR}/layers/meta-car-training</span>
+<span class="st">"</span></pre>
+      </div>
+      <div class="card">
+        <h3>② <code>conf/layer.conf</code> — each layer's ID card</h3>
+        <p>Every layer carries its own <code>conf/layer.conf</code> that registers it with BitBake: its name,
+        priority, where its recipes are, and which layers it needs first.</p>
+        <pre class="code"><span class="cm"># meta-car-training/conf/layer.conf</span>
+<span class="kw">BBPATH</span> .= <span class="st">":${LAYERDIR}"</span>
+<span class="kw">BBFILES</span> += <span class="st">"${LAYERDIR}/recipes-*/*/*.bb \</span>
+<span class="st">            ${LAYERDIR}/recipes-*/*/*.bbappend"</span>
+<span class="kw">BBFILE_COLLECTIONS</span> += <span class="st">"car-training"</span>
+<span class="kw">BBFILE_PRIORITY_car-training</span> = <span class="st">"10"</span>
+<span class="kw">LAYERDEPENDS_car-training</span> = <span class="st">"core openembedded-layer"</span>
+<span class="kw">LAYERSERIES_COMPAT_car-training</span> = <span class="st">"scarthgap"</span></pre>
+      </div>
+    </div>
+
+    <div class="grid g2 reveal d1" style="margin-top:1.2rem;align-items:start">
+      <div class="deep"><h4>Line by line — why each matters</h4>
+        <p><code>BBFILES</code> is the glob telling BitBake where <i>this</i> layer's recipes live.
+        <code>BBFILE_COLLECTIONS</code> gives the layer a name. <code>BBFILE_PRIORITY</code> breaks ties when
+        two layers define the same recipe (higher wins). <code>LAYERDEPENDS</code> says “I need these layers
+        present first” — ours needs <code>core</code> (poky) and <code>openembedded-layer</code> for Python.
+        <code>LAYERSERIES_COMPAT</code> pins the Yocto release (<code>scarthgap</code>) so mismatched layers
+        refuse to build instead of failing cryptically later.</p></div>
+      <div class="card">
+        <h3>Confirm the wiring</h3>
+        <p>On the build machine, ask BitBake what it actually loaded:</p>
+        <div class="term" style="box-shadow:none"><div class="bar"><i></i><i></i><i></i>
+          <span>bitbake-layers show-layers</span></div>
+          <div class="body"><span class="c">$ bitbake-layers show-layers</span>
+<span class="m">layer                path                        pri</span>
+core                 layers/poky/meta             5
+yocto                layers/poky/meta-poky        5
+raspberrypi          layers/meta-raspberrypi      9
+openembedded-layer   layers/…/meta-oe             6
+<span class="g">car-training         layers/meta-car-training    10</span></div></div>
+      </div>
+    </div>
+    <div class="note tip reveal">Mental model of the whole chain: <b>kas</b> clones the layers → writes
+      <b>bblayers.conf</b> to list them → each <b>layer.conf</b> plugs its recipes in and declares its
+      dependencies. That's how six thousand recipes find one another.</div>
+  </section>
+
+  <!-- RECIPE ANATOMY -->
+  <section>
+    <span class="eyebrow reveal">◆ Read a real recipe</span>
+    <h2 class="reveal">Anatomy of our app's recipe</h2>
+    <p class="lead reveal d1">This is (a trimmed version of) the recipe that puts the car software on the
+    image. Every line earns its place.</p>
+    <pre class="code reveal d2"><span class="cm"># car-training-app_1.0.bb — packages the Python app + its service</span>
+<span class="kw">SUMMARY</span> = <span class="st">"Edge-AI line-following car controller"</span>
+<span class="kw">LICENSE</span> = <span class="st">"MIT"</span>
+
+<span class="cm"># where the source comes from (a local folder in our layer)</span>
+<span class="kw">SRC_URI</span> = <span class="st">"file://app"</span>
+
+<span class="cm"># runtime dependencies — MUST be present on the device, not just at build</span>
+<span class="kw">RDEPENDS</span>:${PN} = <span class="st">"python3 python3-gpiod python3-smbus2"</span>
+
+<span class="cm"># install the app under /usr/share and register a systemd service</span>
+<span class="kw">do_install</span>() {
+    install -d ${D}/usr/share/car-training
+    cp -r ${WORKDIR}/app/* ${D}/usr/share/car-training/
+    install -Dm0644 car-training.service \
+        ${D}${systemd_system_unitdir}/car-training.service
+}
+
+<span class="kw">inherit</span> systemd
+<span class="kw">SYSTEMD_SERVICE</span>:${PN} = <span class="st">"car-training.service"</span>
+<span class="kw">SYSTEMD_AUTO_ENABLE</span> = <span class="st">"enable"</span>   <span class="cm"># autostart on boot</span></pre>
+    <div class="note tip reveal"><code>${PN}</code> = "package name", <code>${D}</code> = the staging
+      directory that becomes the rootfs, <code>${WORKDIR}</code> = where the source was unpacked. These
+      variables appear in every recipe.</div>
+  </section>
+
+  <!-- FILES YOU WRITE -->
+  <section>
+    <span class="eyebrow reveal">◆ Reference</span>
+    <h2 class="reveal">The files <em>you</em> write — and why</h2>
+    <p class="lead reveal d1">Yocto uses a small vocabulary of file types. Most come from upstream layers; you
+    only author a handful. Here's the whole set and who writes each:</p>
+
+    <div class="card reveal d1" style="margin-top:1rem">
+      <table class="data">
+        <tr><th>Extension</th><th>What it is</th><th>Who writes it</th></tr>
+        <tr><td><code>.bb</code></td><td>Recipe — build/package one component</td><td><b>us</b> (the app)</td></tr>
+        <tr><td><code>.bbappend</code></td><td>Extends an existing recipe without copying it</td><td><b>us</b>, to tweak upstream</td></tr>
+        <tr><td><code>.conf</code></td><td>Config: <code>layer.conf</code>, <code>local.conf</code>, machine/distro</td><td><b>us</b> (layer.conf) + upstream</td></tr>
+        <tr><td><code>.inc</code></td><td>Include fragment shared between recipes</td><td>mostly upstream</td></tr>
+        <tr><td><code>.bbclass</code></td><td>Reusable logic recipes <code>inherit</code></td><td>upstream (e.g. <code>systemd.bbclass</code>)</td></tr>
+        <tr><td><code>.yml</code></td><td>kas file — describes the whole build</td><td><b>us</b></td></tr>
+        <tr><td><code>.service</code></td><td>systemd unit — how/when our app starts</td><td><b>us</b></td></tr>
+        <tr><td><code>.py</code></td><td>The car application itself</td><td><b>us</b></td></tr>
+        <tr><td><code>.dts → .dtb</code></td><td>Device-tree source → compiled blob</td><td>upstream BSP</td></tr>
+      </table>
+    </div>
+
+    <p class="lead reveal d1" style="margin-top:1.4rem">You already read our recipe (<code>.bb</code>). Here's
+    the <b>systemd service</b> it installs — the file that makes the car software launch on boot. Every line
+    earns its place:</p>
+    <pre class="code reveal d1"><span class="cm"># car-training.service — a systemd unit (we write this)</span>
+<span class="kw">[Unit]</span>
+<span class="fn">Description</span>=Edge-AI line-following car   <span class="cm"># label shown by systemctl status</span>
+<span class="fn">After</span>=network-online.target            <span class="cm"># don't start until Wi-Fi has an IP</span>
+<span class="fn">Wants</span>=network-online.target            <span class="cm"># actively pull that target in</span>
+
+<span class="kw">[Service]</span>
+<span class="fn">ExecStart</span>=/usr/bin/python3 /usr/share/car-training/main.py web
+<span class="fn">Restart</span>=on-failure                     <span class="cm"># crash? systemd relaunches it</span>
+<span class="fn">User</span>=root                              <span class="cm"># needs GPIO/I²C access</span>
+
+<span class="kw">[Install]</span>
+<span class="fn">WantedBy</span>=multi-user.target            <span class="cm"># hook into the normal boot stage</span></pre>
+
+    <div class="grid g3 reveal d1" style="margin-top:1.2rem">
+      <div class="card"><div class="num">[Unit]</div><h3>Identity &amp; order</h3><p>Names the service and says
+        <i>when</i> it may start. <code>After</code>/<code>Wants</code> put it behind the network so the
+        dashboard has Wi-Fi before it opens a socket.</p></div>
+      <div class="card"><div class="num">[Service]</div><h3>How to run it</h3><p><code>ExecStart</code> is the
+        exact command; <code>Restart=on-failure</code> gives resilience; <code>User=root</code> grants the
+        privilege the pins need.</p></div>
+      <div class="card"><div class="num">[Install]</div><h3>When enabled</h3><p><code>WantedBy=multi-user.target</code>
+        is what <code>SYSTEMD_AUTO_ENABLE</code> in the recipe hooks into, so the car autostarts every
+        boot.</p></div>
+    </div>
+    <div class="deep reveal"><h4>The thread that ties it all together</h4><p>Our <code>.bb</code> recipe
+      <code>install</code>s this <code>.service</code> file and our <code>.py</code> app into the rootfs;
+      <code>SYSTEMD_SERVICE</code> + <code>SYSTEMD_AUTO_ENABLE</code> register it; systemd (PID&nbsp;1) reads it
+      at boot and runs our Python. Four small files — <code>.yml</code>, <code>.bb</code>,
+      <code>.service</code>, <code>.py</code> — are the <i>entire</i> footprint of “our” work on top of a whole
+      operating system.</p></div>
+  </section>
+
+  <!-- HANDS-ON TIME -->
+  <section>
+    <span class="eyebrow reveal">◆ The whole flow, end to end</span>
+    <h2 class="reveal">From empty terminal to a booting board</h2>
+    <p class="lead reveal d1">Here is the whole journey in one map — from an empty terminal to a booting
+    system. It splits into two passes: a fast <b>minimal build</b> to learn the moves, then the <b>full car
+    image</b> on real hardware or in QEMU.</p>
+
+    <div class="grid g2 reveal d1" style="margin-top:1.2rem;align-items:start">
+      <div class="card">
+        <div class="num" style="color:var(--lime)">PASS 1 · the minimal build</div>
+        <h3>💻 Learn the moves, end to end</h3>
+        <ol class="steps">
+          <li><b>Raw <code>bitbake</code> minimal build.</b> The hard way — hand-clone each layer, source
+            the env, edit <code>bblayers.conf</code> + <code>local.conf</code>, then
+            <code>bitbake core-image-minimal</code>. See where every step actually lives.</li>
+          <li><b>Same target with <code>kas</code>.</b> One YAML, one command — the contrast makes the point
+            of kas obvious.</li>
+          <li><b>Switch to the course project.</b> Open <code>meta-car-training</code> and walk the folder
+            tree — the very layer &amp; recipe layout we just dissected.</li>
+          <li><b>Make a tiny change.</b> Something visible (hostname / MOTD banner) to prove the change
+            actually reaches the running system.</li>
+          <li><b>Rebuild with <code>kas</code>.</b> Only the delta rebuilds thanks to <code>sstate</code>
+            — seconds, not minutes.</li>
+          <li><b>Boot it.</b> Flash the SD card and plug it into a Pi, <i>or</i> boot the same image in
+            QEMU. Either way the serial console scrolls past — the boot terminal just below is what you see.</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <div class="num" style="color:var(--cyan)">PASS 2 · the full image</div>
+        <h3>🏠 The complete car, on board or in QEMU</h3>
+        <ol class="steps">
+          <li><b>Replay the flow</b> from the minimal build through the tiny change, start to finish.</li>
+          <li><b>Build the <em>full</em> car image</b> (much longer — budget an evening).</li>
+          <li><b>Run it</b> — flash to a fresh microSD and boot a board, or boot in QEMU if there's no
+            hardware to hand.</li>
+          <li><b>Confirm the <code>car-training</code> service comes up</b> and the dashboard is reachable.</li>
+          <li><b>Capture the evidence</b> for Session 2 — a screenshot of <code>active (running)</code> or
+            the dashboard URL loading.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- WATCH IT BOOT -->
+  <section id="boot">
+    <span class="eyebrow reveal">◆ The payoff · watch it come alive</span>
+    <h2 class="reveal">From power to your login prompt</h2>
+    <p class="lead reveal d1">This is (a friendly version of) what scrolls past on the serial console once
+    the SD card is in and power is applied. Every line is a <b>handoff</b>: one layer starting the next —
+    exactly the layers we just built.</p>
+    <div class="term reveal d2" style="margin-top:1rem" data-type='[
+      ["[ ROM ] SoC boot ROM: no code in RAM → reading SD card…\n","m",7],
+      ["[ boot] firmware: loading kernel8.img + bcm2711-rpi-4-b.dtb\n","m",7],
+      ["[    0.000000] Booting Linux on physical CPU 0x0\n","c",5],
+      ["[    0.000000] Linux version 6.6.0 (yocto@builder) aarch64\n","c",5],
+      ["[    0.142187] Machine model: Raspberry Pi 4 Model B\n","c",5],
+      ["[    0.318402] Memory: 3908M available\n","c",5],
+      ["[    0.774510] brcmstb-i2c 3f804000.i2c: bus registered → /dev/i2c-1\n","c",5],
+      ["[    0.902118] gpiochip0: registered 58 GPIO lines → /dev/gpiochip0\n","c",5],
+      ["[    1.204773] EXT4-fs (mmcblk0p2): mounted filesystem as /\n","g",5],
+      ["[    1.360051] systemd[1]: Detected architecture arm64\n","g",5],
+      ["[    1.512900] systemd[1]: Reached target basic.target\n","g",5],
+      ["[    2.031244] systemd[1]: Reached target network-online.target\n","g",5],
+      ["[    2.244881] systemd[1]: Reached target multi-user.target\n","g",5],
+      ["[    2.301067] systemd[1]: Starting car-training.service…\n","v",5],
+      ["[    2.640233] car-training[412]: loading model.tflite (14 KB)\n","v",5],
+      ["[    2.905612] car-training[412]: dashboard on http://192.168.1.42:8080\n","c",5],
+      ["[    2.912004] systemd[1]: Started car-training.service.\n","g",5],
+      ["\nraspberrypi4 login: ","g",22],["root\n","c",26],
+      ["root@raspberrypi4:~# ","g",22],["ready to drive_","",40]
+    ]'>
+      <div class="bar"><i></i><i></i><i></i><span>ttyS0 — serial console @ 115200 baud</span></div>
+      <div class="body"></div>
+    </div>
+    <div class="note reveal">Read it top-to-bottom and you can <b>see the six boot stages</b>: ROM →
+      firmware → kernel (with the device tree naming the board) → the kernel registering <code>/dev/i2c-1</code>
+      and <code>/dev/gpiochip0</code> (the very files Session&nbsp;2 will open) → rootfs mounted → systemd
+      reaching its targets → <b>your</b> service starting.</div>
+  </section>
+
+  <!-- TROUBLESHOOTING -->
+  <section>
+    <span class="eyebrow reveal">◆ When it breaks (it will)</span>
+    <h2 class="reveal">Troubleshooting field guide</h2>
+    <div class="grid g2 reveal d1" style="margin-top:1rem">
+      <div class="pitfall"><b>Build fails: "Nothing RPROVIDES X".</b><br>A recipe needs a package no layer
+        provides. Add the correct layer/package name (real example from this course:
+        <code>python3-libgpiod</code> doesn't exist — the right one is <code>python3-gpiod</code>).</div>
+      <div class="pitfall"><b>Board shows nothing / rainbow screen.</b><br>Firmware can't find or load the
+        kernel. Re-flash, verify the card, and check the serial console for the first error line.</div>
+      <div class="pitfall"><b>Boots but no dashboard.</b><br>The OS is fine, your service isn't. Run
+        <code>journalctl -u car-training</code> — a missing Python module or wrong path is the usual culprit.</div>
+      <div class="pitfall"><b>Edited the app but nothing changed.</b><br>The recipe caches source. Force a
+        rebuild of just that recipe: <code>bitbake -c cleansstate car-training-app &amp;&amp; kas build …</code></div>
+    </div>
+    <div class="deep reveal"><h4>Golden debugging rule</h4><p>Always read <b>the first</b> error, not the
+      last. Later errors are usually consequences. The serial console and <code>journalctl</code> are your
+      two best friends all program long.</p></div>
+  </section>
+
+  <!-- EXERCISES -->
+  <section>
+    <span class="eyebrow reveal">◆ Challenge yourself</span>
+    <h2 class="reveal">Exercises</h2>
+    <div class="grid g3 reveal d1" style="margin-top:1rem">
+      <div class="card"><div class="num">WARM-UP</div><h3>Trace the relay</h3><p>Without looking, list the
+        six boot stages in order and name one failure symptom for each.</p></div>
+      <div class="card"><div class="num">HANDS-ON</div><h3>Shrink the image</h3><p>Find one package you can
+        remove from the image recipe, rebuild, and compare the <code>.wic.bz2</code> size.</p></div>
+      <div class="card"><div class="num">STRETCH</div><h3>Add a MOTD</h3><p>Make the board print a custom
+        welcome banner on login by adding a file to the rootfs via a small recipe append.</p></div>
+    </div>
+  </section>
+
+  <!-- REQUIRED DELIVERABLE + PREP FOR NEXT -->
+  <section id="deliver">
+    <span class="eyebrow reveal">◆ Take-home · required for Session 2</span>
+    <h2 class="reveal">Bring a bootable image — and the story behind it</h2>
+    <p class="lead reveal d1">Session&nbsp;2 <b>starts by booting your image in the room</b>. That means the
+    two halves of your take-home job are: <b>run the full build + flash at home</b>, and <b>be ready to walk
+    us through what your build actually does</b>. From here on, every session begins with your work.</p>
+
+    <div class="grid g2 reveal d1" style="margin-top:1rem;align-items:start">
+      <div class="card"><h3>1 · A booting SD card</h3>
+        <p>Replay the in-class flow at home: <code>kas build</code>, flash the SD card, plug it into the
+        board, and confirm the <code>car-training</code> service is up. Bring the card, the board (if you
+        have one), or a screenshot of <code>systemctl status car-training</code> — evidence that your image
+        boots.</p>
+        <span class="chip lime">build</span><span class="chip">flash</span><span class="chip">boot</span></div>
+      <div class="card"><h3>2 · Present the architecture &amp; the build</h3>
+        <p>A short (5–8 min) walkthrough: draw the layer stack in your own words (who owns each layer, what
+        would break if it disappeared) and read <code>kas-raspberrypi4.yml</code> section by section
+        justifying <i>why</i> each line is there.</p>
+        <span class="chip cyan">arch</span><span class="chip">kas</span><span class="chip">reproducible</span></div>
+    </div>
+
+    <div class="prep next reveal">
+      <span class="eyebrow" style="color:var(--cyan);border-color:rgba(34,211,238,.4)">◆ Research keywords · come prepared</span>
+      <p class="plead">Session&nbsp;2 opens the running system — libraries, syscalls, the kernel. Research
+      these so you can teach them back to the room and dive into the AI-assisted exercise:</p>
+      <div class="kws">
+        <span class="kw">userspace vs kernel</span><span class="kw">system call</span>
+        <span class="kw">ioctl</span><span class="kw">/dev/gpiochip0</span><span class="kw">/dev/i2c-1</span>
+        <span class="kw">libgpiod</span><span class="kw">smbus2</span><span class="kw">RDEPENDS vs DEPENDS</span>
+        <span class="kw">bbappend</span><span class="kw">strace</span>
+        <span class="kw">out-of-tree kernel module</span><span class="kw">character device driver</span>
+      </div>
+      <ul class="qs">
+        <li>Why can't your Python app touch a hardware pin directly? Who is stopping it and why?</li>
+        <li>What does <code>ioctl()</code> do, and how is it different from <code>read()</code>/<code>write()</code>?</li>
+        <li>Pick one line of Python that toggles a GPIO and trace — in your own words — every layer it passes
+          through before a voltage changes on the pin.</li>
+        <li>What is a <b>.bbappend</b>? And what is an <b>out-of-tree kernel module</b>? Session&nbsp;2 you'll
+          write one of each with the help of AI.</li>
+      </ul>
+    </div>
+    <div class="field reveal">
+      <span class="tag">🏭 From the field</span>
+      <h4>This is exactly how a design review starts</h4>
+      <p>On a real embedded project I never open an editor before I can draw the architecture and defend every
+      block. If you can't sketch it, you don't understand it yet — and colleagues will find the holes fast.
+      That's the muscle we're training here.</p>
+    </div>
+  </section>
+
+  <!-- QEMU: RUN WITHOUT HARDWARE -->
+  <section id="qemu">
+    <span class="eyebrow reveal">◆ No board? No problem</span>
+    <h2 class="reveal">Boot the whole thing in QEMU — no hardware needed</h2>
+    <p class="lead reveal d1">Only one member of each team gets a physical board. Everyone else still needs
+    to build, boot and hack on the exact same image — so they run it in <b>QEMU</b>: a machine emulator that
+    boots your ARM image on an ordinary x86 laptop. Same bootloader, same kernel, same rootfs, same app —
+    just no wires.</p>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> No real car to practise in? <b>QEMU</b> is a driving video-game that behaves just like the real car. You can crash it a hundred times and nothing actually breaks — perfect for the teammates without a board.</div>
+
+    <div class="grid g2 reveal d1" style="margin-top:1.2rem;align-items:start">
+      <div class="card">
+        <span class="eyebrow">◆ What is QEMU?</span>
+        <p>QEMU emulates a <b>whole computer</b> in software — CPU, RAM, storage and peripherals. It reads
+        the same kernel and rootfs the real board would, and executes the ARM instructions on your laptop by
+        translating them on the fly. To the software running inside, it looks exactly like hardware.</p>
+      </div>
+      <div class="card">
+        <span class="eyebrow">◆ Why QEMU for this course?</span>
+        <ul>
+          <li><b>No hardware barrier</b> — the four teammates without a Pi build and boot the identical image.</li>
+          <li><b>Faster loop</b> — edit → build → boot in a window, no flashing an SD card each time.</li>
+          <li><b>Crash-safe</b> — a bad image just closes the window; nothing to re-flash or brick.</li>
+          <li><b>Same skills</b> — the Yocto build, the recipes, systemd, <code>journalctl</code> — all identical.</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="lead reveal d1" style="margin-top:1.4rem">The <b>only</b> thing that changes is the target
+    machine — you point kas at a QEMU machine instead of the Pi. Everything else (target image, layers, your
+    recipe) stays byte-for-byte the same:</p>
+    <div class="grid g2 reveal d1" style="margin-top:.8rem;align-items:start">
+      <div class="card">
+        <h3>🍓 For the real board</h3>
+<pre class="code"><span class="cm"># kas-raspberrypi4.yml</span>
+<span class="kw">machine</span>: raspberrypi4-64
+<span class="kw">distro</span>: poky
+<span class="kw">target</span>: core-image-car-training
+<span class="kw">repos</span>:
+  meta-raspberrypi:      <span class="cm"># ← BSP: Pi firmware + kernel</span>
+    url: …/meta-raspberrypi</pre>
+        <p class="mini">Produces a <code>.wic.bz2</code> you flash to a microSD.</p>
+      </div>
+      <div class="card">
+        <h3>💻 For QEMU</h3>
+<pre class="code"><span class="cm"># kas-qemu.yml</span>
+<span class="kw">machine</span>: qemuarm64        <span class="cm"># ← the only real change</span>
+<span class="kw">distro</span>: poky
+<span class="kw">target</span>: core-image-car-training
+<span class="cm"># no meta-raspberrypi BSP needed —</span>
+<span class="cm"># QEMU's machine ships with Poky</span></pre>
+        <p class="mini">Produces an <code>.ext4</code> + kernel that <code>runqemu</code> boots directly.</p>
+      </div>
+    </div>
+
+    <p class="lead reveal d1" style="margin-top:1.4rem">Then one command boots it — the same boot chain from
+    earlier scrolls past, straight to a login prompt in a window:</p>
+    <div class="term reveal d1" style="margin-top:.8rem"><div class="bar"><i></i><i></i><i></i>
+      <span>runqemu — emulated serial console</span></div>
+      <div class="body"><span class="v">$ kas build kas-qemu.yml</span>   <span class="m"># build the image</span>
+<span class="v">$ runqemu qemuarm64 nographic</span>   <span class="m"># boot it, no window, serial only</span>
+<span class="m">[    0.000000] Booting Linux on physical CPU 0x0</span>
+<span class="m">[    0.318402] Machine model: QEMU aarch64 Virtual Machine</span>
+<span class="g">[    1.204773] EXT4-fs (vda): mounted filesystem as /</span>
+<span class="g">[    2.244881] systemd[1]: Reached target multi-user.target</span>
+<span class="g">[    2.912004] systemd[1]: Started car-training.service.</span>
+
+qemuarm64 login: <span class="c">root</span>
+root@qemuarm64:~# <span class="c">_</span></div></div>
+    <div class="note tip reveal"><b>The honest limit:</b> QEMU has no real GPIO or I²C pins, so the motors and
+      sensors are simulated (or the app runs in a headless test mode). It's perfect for the <i>build</i>, the
+      <i>boot</i> and all the <i>software</i> logic — real hardware bring-up still needs the one physical
+      board. Split the work: QEMU for everyone's dev loop, the board for the final wiring.</div>
+  </section>
+
+  <!-- TAKEAWAYS + PAGER -->
+  <section>
+    <div class="card reveal" style="border-color:rgba(163,230,53,.4)">
+      <span class="eyebrow" style="color:var(--lime);border-color:rgba(163,230,53,.4)">◆ Takeaways</span>
+      <ul>
+        <li>Bare-metal, RTOS, Linux — pick by the <b>real-time requirement</b>. Our AI car needs rich
+          userspace, so Linux wins (and we design around the jitter).</li>
+        <li>The car is a <b>stack of layers</b>. Every session opens one; keep the map in your head.</li>
+        <li>An image = bootloader + kernel + device tree + rootfs. <b>Yocto/kas</b> is the factory that
+          builds it — reproducibly, from source, for our exact board.</li>
+        <li>From next session on: <b>you present first, we build second</b>. Come prepared.</li>
+      </ul>
+    </div>
+    <div class="pager">
+      <a class="btn ghost" href="index.html">← Home</a>
+      <a class="btn primary" href="session2.html">Session 2 · Architecture →</a>
+    </div>
+  </section>
+
+</div>
+
+<footer class="foot"><div class="wrap">Code &amp; Drive — Level 2 · Session 1</div></footer>
+
+<script src="assets/app.js"></script>
+<script>
+/* ---- interactive Yocto image baker ---- */
+(function(){
+  var LAYERS=[
+    {id:"poky",name:"poky (meta, meta-poky)",req:true,desc:"core kernel + userspace"},
+    {id:"bsp",name:"meta-raspberrypi (BSP)",req:true,desc:"board support: Pi kernel & firmware"},
+    {id:"oe",name:"meta-openembedded",req:true,desc:"Python, libgpiod, smbus2…"},
+    {id:"app",name:"meta-car-training",req:true,desc:"our car app + systemd service"},
+    {id:"tf",name:"meta-tensorflow-lite",req:false,desc:"optional: on-board AI runtime"}
+  ];
+  var host=document.getElementById("layers"), out=document.getElementById("bakeout"),
+      art=document.getElementById("artifact"), state={};
+  LAYERS.forEach(function(L){
+    state[L.id]=L.req; // start with required ones on
+    var row=document.createElement("label");
+    row.className="layer"; row.style.cursor="pointer"; row.style.marginTop="8px";
+    row.innerHTML='<div><div class="t">'+L.name+'</div><div class="s">'+L.desc+
+      (L.req?' · <span style="color:var(--rose)">required</span>':' · optional')+'</div></div>';
+    var cb=document.createElement("input"); cb.type="checkbox"; cb.checked=L.req;
+    cb.style.width="20px"; cb.style.height="20px"; cb.style.accentColor="#22d3ee";
+    cb.onchange=function(){ state[L.id]=cb.checked; };
+    row.appendChild(cb); host.appendChild(row);
+  });
+  function line(cls,txt){ return "<div class='"+cls+"'>"+txt+"</div>"; }
+  document.getElementById("bake").onclick=function(){
+    art.innerHTML=""; out.innerHTML="";
+    var missing=LAYERS.filter(function(L){return L.req && !state[L.id];});
+    var intro=[
+      ["m","$ kas build yocto/kas-raspberrypi4.yml"],
+      ["c","Cloning layers: poky, meta-raspberrypi, meta-openembedded…"],
+      ["c","Parsing 2,214 recipes (.bb) across the enabled layers…"],
+      ["c","Resolving DEPENDS / RDEPENDS dependency graph…"]
+    ];
+    var work=[
+      ["c","NOTE: Executing Tasks  (do_fetch → do_configure → do_compile → do_install)"],
+      ["c","Compiling linux-raspberrypi 6.6 … the long one ☕"],
+      ["c","Building rootfs: python3, libgpiod, smbus2, car-training-app"],
+      ["c","Assembling image: core-image-car-training.wic.bz2"],
+      ["g","Tasks: 6138 succeeded, 0 failed ✓"],
+      ["g","Image ready ✓"]
+    ];
+    var seq=intro.slice(), i=0;
+    var t=setInterval(function(){
+      if(i<seq.length){ out.innerHTML+=line(seq[i][0],seq[i][1]); i++; return; }
+      clearInterval(t);
+      if(missing.length){
+        out.innerHTML+=line("","<span style='color:var(--rose)'>ERROR: Nothing RPROVIDES '"+
+          missing[0].name.split(" ")[0]+"' — required layer is disabled.</span>");
+        out.innerHTML+=line("m","Build failed after 12s. Enable the missing layer and bake again.");
+      }else{
+        var j=0, t2=setInterval(function(){
+          if(j<work.length){ out.innerHTML+=line(work[j][0],work[j][1]); j++; return; }
+          clearInterval(t2);
+          art.innerHTML='<div class="card" style="border-color:var(--lime);text-align:center">'+
+            '<div class="big grad" style="font-size:1.4rem">core-image-car-training.wic.bz2</div>'+
+            '<p class="s" style="color:var(--muted)">flash me to an SD card 💾</p></div>';
+        },420);
+      }
+    },420);
+  };
+})();
+</script>
+<script src="assets/deck.js"></script>
+</body>
+</html>

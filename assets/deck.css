@@ -1,0 +1,145 @@
+/* =========================================================================
+   Code & Drive — Level 2 · DECK / PRESENTATION MODE
+   Full-screen slides, keyboard/click builds. Layered on top of style.css.
+   A page becomes a deck simply by wrapping slides in <main class="deck">.
+   ========================================================================= */
+
+:root{ --deck-ease:cubic-bezier(.2,.7,.2,1); }
+
+/* the deck owns the viewport — no page scroll */
+body.deck-mode{overflow:hidden;height:100vh;height:100dvh}
+body.deck-mode .topbar{background:rgba(7,11,22,.4)}
+body.deck-mode .foot{display:none}
+
+/* ---- slide surface ------------------------------------------------------ */
+.deck{position:fixed;inset:0;z-index:10;max-width:none;width:auto;margin:0;padding:0}
+.deck > :not(.slide){display:none}
+.deck .slide{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;justify-content:safe center;
+  padding:76px clamp(20px,6vw,92px) 74px;
+  opacity:0;visibility:hidden;pointer-events:none;
+  transform:translateY(26px) scale(.985);
+  transition:opacity .5s var(--deck-ease),transform .5s var(--deck-ease),visibility 0s linear .5s;
+  overflow:auto;scrollbar-width:thin;
+}
+.deck .slide.active{
+  opacity:1;visibility:visible;pointer-events:auto;transform:none;
+  transition:opacity .55s var(--deck-ease),transform .55s var(--deck-ease),visibility 0s;
+}
+.deck .slide.past{transform:translateY(-26px) scale(.985)}
+.deck .slide-inner{max-width:1060px;margin:auto;width:100%}
+.deck .slide.left .slide-inner{margin:auto auto auto 0}
+.deck .slide.tight{justify-content:flex-start;padding-top:96px}
+
+/* per-slide top eyebrow badge */
+.deck .slide .snum{position:absolute;top:84px;right:clamp(20px,6vw,92px);
+  font-family:var(--mono);font-size:.74rem;color:var(--muted);letter-spacing:.14em}
+
+/* ---- fragments: build in on advance ------------------------------------ */
+.deck .frag{opacity:0;transform:translateY(18px) scale(.99);
+  transition:opacity .45s var(--deck-ease),transform .45s var(--deck-ease);
+  will-change:opacity,transform}
+.deck .frag.in{opacity:1;transform:none}
+.deck .frag.dim{opacity:.32;filter:saturate(.5)}
+/* a group container (stack, grid, primer, column…) stays invisible until its
+   own first fragment builds in — so later sections and their boxes never
+   appear before the presenter reaches them. Space is still reserved, so the
+   layout never jumps. */
+.deck .af-group{transition:opacity .4s var(--deck-ease)}
+.deck .slide.active .af-group:has(.frag):not(:has(.frag.in)){opacity:0}
+
+/* scroll-reveal is meaningless in a deck — always show */
+.deck .reveal{opacity:1!important;transform:none!important}
+
+/* first-visit hint */
+.deck-hint{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);z-index:45;
+  font-family:var(--mono);font-size:.8rem;color:var(--muted);
+  background:rgba(11,18,36,.85);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .9rem;display:flex;gap:.6rem;align-items:center;
+  box-shadow:0 10px 30px rgba(0,0,0,.4);animation:hintpulse 2.6s ease-in-out infinite}
+.deck-hint.gone{opacity:0;transform:translate(-50%,10px);pointer-events:none;transition:.5s}
+@keyframes hintpulse{50%{border-color:rgba(34,211,238,.5)}}
+
+/* ---- bottom control bar ------------------------------------------------- */
+.deck-ui{position:fixed;left:0;right:0;bottom:0;z-index:40;
+  display:flex;align-items:center;gap:.7rem;padding:.5rem clamp(14px,4vw,40px);
+  background:linear-gradient(0deg,rgba(7,11,22,.82),transparent)}
+.deck-ui .spacer{flex:1}
+.deck-ui .db{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
+  border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;
+  font-size:1rem;transition:transform .15s,border-color .15s,box-shadow .15s}
+.deck-ui .db:hover{transform:translateY(-2px);border-color:var(--cyan);
+  box-shadow:0 0 18px rgba(34,211,238,.25)}
+.deck-ui .db:disabled{opacity:.35;cursor:default;transform:none;box-shadow:none;border-color:var(--line)}
+.deck-ui .db.next{border-color:transparent;color:#06101f;
+  background:linear-gradient(90deg,var(--cyan),var(--violet));font-weight:800}
+.deck-count{font-family:var(--mono);font-size:.82rem;color:var(--muted);min-width:56px;text-align:center}
+.deck-title{font-family:var(--mono);font-size:.78rem;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:36vw}
+
+/* thin progress line at very top */
+.deck-bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:60;
+  background:linear-gradient(90deg,var(--cyan),var(--violet),var(--lime));
+  box-shadow:var(--glow) var(--violet);transition:width .4s var(--deck-ease)}
+
+/* ---- overview / jump menu ---------------------------------------------- */
+.deck-ov{position:fixed;inset:0;z-index:70;background:rgba(4,7,14,.86);
+  backdrop-filter:blur(6px);display:none;padding:70px clamp(20px,6vw,80px);overflow:auto}
+.deck-ov.open{display:block}
+.deck-ov h3{font-family:var(--mono);font-size:.8rem;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--cyan);margin:0 0 1rem}
+.deck-ov .ovgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.deck-ov .ovcard{text-align:left;border:1px solid var(--line);border-radius:14px;padding:14px 16px;
+  background:var(--card);color:var(--ink);cursor:pointer;transition:transform .15s,border-color .15s;
+  display:flex;flex-direction:column;gap:.3rem;min-height:88px}
+.deck-ov .ovcard:hover{transform:translateY(-3px);border-color:var(--cyan)}
+.deck-ov .ovcard.cur{border-color:var(--violet);box-shadow:0 0 24px rgba(168,85,247,.25)}
+.deck-ov .ovcard .oi{font-family:var(--mono);font-size:.74rem;color:var(--violet)}
+.deck-ov .ovcard .ot{font-weight:800;font-size:.98rem;line-height:1.25}
+.deck-ov .ovclose{position:fixed;top:20px;right:24px;font-family:var(--mono);color:var(--muted);
+  background:none;border:0;cursor:pointer;font-size:.85rem}
+
+/* ---- helpers for deck slide layouts ------------------------------------ */
+.deck .kicker,.deck .eyebrow{margin-bottom:.4rem}
+.deck .slide h1{font-size:clamp(2.1rem,6vw,4rem)}
+.deck .slide h2{font-size:clamp(1.7rem,4.4vw,3rem)}
+.deck .slide .lead{font-size:clamp(1rem,2.2vw,1.35rem);max-width:64ch}
+.deck section{padding:0}
+
+/* big idea circle flow inside deck */
+.ideaflow .nodes{display:flex;align-items:flex-start;justify-content:center;flex-wrap:wrap;margin-top:1.4rem}
+.ideaflow .node{background:none;border:0;font:inherit;padding:0;color:var(--muted);
+  display:flex;flex-direction:column;align-items:center;gap:.5rem}
+.ideaflow .node .ring{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;
+  font-weight:900;font-size:1.4rem;border:2px solid var(--line);color:var(--muted);transition:.35s}
+.ideaflow .node em{font-style:normal;font-family:var(--mono);font-size:.82rem;letter-spacing:.03em}
+.ideaflow .node.on{color:#e6edf7}
+.ideaflow .node.on .ring{border-color:transparent;color:#04121f;
+  background:linear-gradient(135deg,var(--cyan),var(--violet));box-shadow:0 0 26px rgba(34,211,238,.4)}
+.ideaflow .link{width:clamp(26px,7vw,110px);height:2px;background:#2a3a5c;margin:35px .4rem 0;
+  transition:background .35s}
+.ideaflow .link.on{background:linear-gradient(90deg,var(--cyan),var(--violet))}
+.ideacap{margin-top:1.6rem;border:1px solid var(--line);border-radius:14px;padding:1rem 1.2rem;
+  background:var(--card);min-height:70px;font-size:1.05rem;color:#dbe6ff}
+.ideacap b{color:var(--cyan)}
+
+@media(max-width:820px){
+  .deck .slide{padding:70px 20px 78px}
+  .deck-title{display:none}
+  .deck-ov .ovgrid{grid-template-columns:1fr 1fr}
+}
+@media(prefers-reduced-motion:reduce){
+  .deck .slide{transition:opacity .2s}
+  .deck .frag{transition:opacity .2s}
+  .deck .slide.active{transition:opacity .2s}
+}
+
+/* ---- light mode overrides for deck chrome ------------------------------- */
+:root[data-theme="light"] body.deck-mode .topbar{background:rgba(255,255,255,.6)}
+:root[data-theme="light"] .deck-ui{background:linear-gradient(0deg,rgba(255,255,255,.88),transparent)}
+:root[data-theme="light"] .deck-hint{background:rgba(255,255,255,.9);box-shadow:0 10px 30px rgba(30,50,90,.18)}
+:root[data-theme="light"] .deck-ov{background:rgba(238,242,249,.9)}
+:root[data-theme="light"] .ideacap{color:#28374f}
+:root[data-theme="light"] .ideaflow .node.on{color:#28374f}
+
