@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S2 · Linux Architecture &amp; Dependencies</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/deck.css">
+</head>
+<body>
+<div class="progress"></div>
+<header class="topbar">
+  <div class="brand"><span class="dot"></span> Code&nbsp;&amp;&nbsp;Drive <small>· Lvl 2</small></div>
+  <nav>
+    <a href="index.html">Home</a><a href="session1.html">S1</a><a href="session2.html">S2</a>
+    <!-- PUBLISH: uncomment each tab here (and in every published page) as the session goes live
+    <a href="session3.html">S3</a><a href="session4.html">S4</a><a href="session5.html">S5</a><a href="session6.html">S6</a>
+    -->
+  </nav>
+</header>
+
+<div class="wrap deck">
+
+  <section class="hero" style="min-height:78vh">
+    <div class="reveal">
+      <div class="kicker">SESSION 02 · 4 HOURS</div>
+      <h1>Open the running system — <span class="grad">follow the signal</span></h1>
+      <p class="lead reveal d1">You've built, flashed and booted your own image at home. Today we skip the
+      boot entirely — the boards are already up — and jump straight into the <b>running middle</b> of the
+      stack: pick one Python line, watch it descend through library → syscall → kernel → driver → pin.
+      Same layers as Session&nbsp;1, this time seen from inside.</p>
+      <div class="hero-actions reveal d2">
+        <a class="btn primary" href="#stack">Trace the signal →</a>
+        <a class="btn ghost" href="#challenge">AI-assisted challenge</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLIPPED FORMAT + ARCH MAP -->
+  <section id="where">
+    <span class="eyebrow reveal">◆ Before we dive in · how today runs</span>
+    <h2 class="reveal">You present first — then we open the hardware</h2>
+    <p class="lead reveal d1">Last session you left with a list of keywords. Today we start with <b>your
+    findings</b>: each of you takes a keyword and teaches it back to the room. I'll add the industrial context
+    and the pitfalls I've hit in real projects, then we go straight to the board and <b>see the layers with
+    our own eyes</b> — <code>ls /dev</code>, <code>strace</code>, <code>i2cdetect</code>. You present, we
+    discuss, I show my version, I review yours.</p>
+
+    <div class="sflow reveal d1">
+      <div class="step"><div class="n">01 · before class</div><h4>You booted &amp; researched</h4>
+        <p>Full build + flash + boot at home. Keywords: ioctl, /dev, libgpiod, RDEPENDS, strace, bbappend.</p></div>
+      <div class="step you"><div class="n">02 · first hour</div><h4>You present</h4>
+        <p>Explain a keyword; the room challenges it; I add the missing piece.</p></div>
+      <div class="step"><div class="n">03 · on the running board</div><h4>We trace &amp; extend</h4>
+        <p>Trigger a Python line, watch it descend the stack, then take on the AI-assisted challenge.</p></div>
+      <div class="step"><div class="n">04 · leaving</div><h4>Next brief</h4>
+        <p>Keywords for Session 3 (actuation) and your next deliverable.</p></div>
+    </div>
+
+    <h3 class="reveal" style="margin-top:1.8rem">Where we are in the stack today</h3>
+    <p class="lead reveal d1">Session 1 built the ground floor and got the board booting. Today we live in
+    the <b>middle</b> — the libraries, syscall interface and kernel that carry your intent to the hardware.</p>
+    <div class="archmap reveal d1">
+      <div class="lyr"><div><div class="t">🧠 Application — the AI</div>
+        <div class="s">features → model → action</div></div><span class="badge">Session 5</span></div>
+      <div class="lyr"><div><div class="t">🎚️ Abstraction — drivers you call</div>
+        <div class="s">clean sensor &amp; actuator APIs</div></div><span class="badge">Sessions 3 · 4</span></div>
+      <div class="lyr here"><div><div class="t">📚 User-space libraries</div>
+        <div class="s">libgpiod, smbus2, python, tflite-runtime</div></div>
+        <span class="badge">◀ today</span></div>
+      <div class="lyr here"><div><div class="t">🚪 System-call interface</div>
+        <div class="s">ioctl() and the /dev files — userspace ↔ kernel</div></div>
+        <span class="badge">◀ today</span></div>
+      <div class="lyr here"><div><div class="t">⚙️ Linux kernel + subsystems</div>
+        <div class="s">GPIO / I²C subsystems, drivers</div></div>
+        <span class="badge">◀ today</span></div>
+      <div class="lyr done"><div><div class="t">🧱 Board support &amp; the image</div>
+        <div class="s">bootloader, device tree, kernel config, rootfs</div></div>
+        <span class="badge">✓ Session 1</span></div>
+      <div class="lyr"><div><div class="t">🔌 Hardware</div>
+        <div class="s">Pi / BBB, H-bridge, sensors</div></div><span class="badge">Sessions 3 · 4</span></div>
+    </div>
+    <div class="field reveal">
+      <span class="tag">🏭 From the field</span>
+      <h4>Why this middle stripe is where most embedded bugs live</h4>
+      <p>In production, the code you write is <i>tiny</i>; the interesting failures happen in the
+      <b>library ↔ syscall ↔ kernel</b> handshake we're studying today. A missing runtime dependency, the
+      wrong <code>ioctl</code>, a permission bit — those are the tickets I actually spend my days closing.
+      Reading <code>strace</code> fluently is a superpower on the job.</p>
+      <div class="sig">— straight from real embedded-Linux debugging sessions</div>
+    </div>
+  </section>
+
+  <!-- INTERACTIVE STACK -->
+  <section id="stack">
+    <span class="eyebrow reveal">◆ Interactive</span>
+    <h2 class="reveal">Send a signal down the stack ⚡</h2>
+    <div class="primer reveal">
+      <span class="eyebrow">◆ Words first</span>
+      <p class="plead">This animation uses six words. Grab them first, then every layer makes sense:</p>
+      <dl>
+        <dt>The stack</dt><dd>The vertical chain of software layers a request passes through — your app at the
+          top, hardware at the bottom. <span class="lit">Like floors in a building.</span></dd>
+        <dt>Library</dt><dd>Reusable code you <code>import</code> (e.g. <code>libgpiod</code>) that wraps messy
+          details for you. <span class="lit">A helper you didn't have to write.</span></dd>
+        <dt>System call (syscall)</dt><dd>The one official doorway a program uses to ask the kernel to do
+          something privileged. <span class="lit">Knocking on the manager's door.</span></dd>
+        <dt>Driver</dt><dd>Kernel code that knows how to operate one specific piece of hardware.
+          <span class="lit">The specialist for each device.</span></dd>
+        <dt>Register</dt><dd>A tiny hardware setting inside the chip; writing it makes a pin go HIGH.
+          <span class="lit">The actual physical lever.</span></dd>
+        <dt>Userspace vs kernel</dt><dd><b>Userspace</b> = your app, low privilege. <b>Kernel</b> = the
+          privileged core that owns the hardware. <span class="lit">You ask; the kernel acts.</span></dd>
+      </dl>
+    </div>
+    <p class="lead reveal d1">Press the button: watch a <code>set_pin(HIGH)</code> travel from your Python
+    app all the way to the motor pin. Click any layer to learn what it does.</p>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> Sending a signal down the stack is like ordering food: <b>you</b> (the app) tell the <b>waiter</b> (the library), who carries the order through the <b>kitchen door</b> (the syscall) to the <b>chef</b> (the kernel), who tells the right <b>cook</b> (the driver) to actually make the dish — flip the pin.</div>
+
+    <div class="grid g2 reveal d2" style="margin-top:1.2rem;align-items:start">
+      <div>
+        <div class="stack" id="lstack">
+          <div class="layer" data-i="0"><span class="spark"></span>
+            <div><div class="t">Your app · Python</div><div class="s">gpio.set(EN1, HIGH)</div></div>
+            <span class="chip lime">meta-car-training</span></div>
+          <div class="layer" data-i="1"><span class="spark"></span>
+            <div><div class="t">Library · libgpiod / smbus2</div><div class="s">wraps the kernel interface</div></div>
+            <span class="chip cyan">meta-openembedded</span></div>
+          <div class="layer" data-i="2"><span class="spark"></span>
+            <div><div class="t">System call</div><div class="s">ioctl() — the userspace↔kernel doorway</div></div>
+            <span class="chip">glibc</span></div>
+          <div class="layer" data-i="3"><span class="spark"></span>
+            <div><div class="t">Kernel</div><div class="s">GPIO subsystem routes the request</div></div>
+            <span class="chip violet">meta / BSP</span></div>
+          <div class="layer" data-i="4"><span class="spark"></span>
+            <div><div class="t">Driver</div><div class="s">SoC GPIO driver writes a register</div></div>
+            <span class="chip violet">BSP</span></div>
+          <div class="layer" data-i="5"><span class="spark"></span>
+            <div><div class="t">Hardware · the pin</div><div class="s">3.3&nbsp;V appears → H-bridge → motor</div></div>
+            <span class="chip lime">metal</span></div>
+        </div>
+        <button class="btn primary" id="fire" style="margin-top:1rem">⚡ Fire set_pin(HIGH)</button>
+      </div>
+
+      <div class="card" style="position:sticky;top:80px">
+        <span class="eyebrow">◆ Layer detail</span>
+        <div id="detail" style="margin-top:.8rem">
+          <h3>Click a layer</h3>
+          <p class="lead" style="font-size:.98rem">Each layer only talks to its immediate neighbours. That
+          isolation is what lets one app run on very different boards.</p>
+        </div>
+      </div>
+    </div>
+    <div class="note tip reveal">The <b>same Python line</b> works on a Pi and a BeagleBone. Only the bottom
+      layers (driver + hardware) differ — and Yocto's <b>BSP layer</b> supplies those per board.</div>
+  </section>
+
+  <!-- KERNEL VS USERSPACE -->
+  <section>
+    <span class="eyebrow reveal">◆ Concept</span>
+    <h2 class="reveal">Why the wall between kernel &amp; userspace?</h2>
+    <div class="grid g2 reveal d1" style="margin-top:1rem">
+      <div class="card">
+        <h3>🧑‍💻 Userspace (your app)</h3>
+        <p>Runs with limited privilege. It <i>cannot</i> touch hardware registers directly — a bug would
+        crash the whole board. It must <b>ask</b> the kernel.</p>
+        <span class="chip">Python</span><span class="chip">TFLite</span><span class="chip">web server</span>
+      </div>
+      <div class="card">
+        <h3>🛡️ Kernel (privileged)</h3>
+        <p>Owns the hardware. It arbitrates between processes, enforces safety, and exposes a controlled
+        door — the <b>system call</b> — for userspace to make requests.</p>
+        <span class="chip violet">drivers</span><span class="chip violet">scheduler</span><span class="chip violet">memory</span>
+      </div>
+    </div>
+    <div class="note reveal"><b>The doorway:</b> a syscall like <code>ioctl()</code> switches the CPU into
+      kernel mode, does the privileged work, then returns. That transition is cheap but not free — it's one
+      reason precise timing is hard (Session&nbsp;4).</div>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> You're a guest in a restaurant — you can't stroll into the kitchen and grab the knives. You ask the staff. The <b>kitchen door</b> (the syscall) is the only way in, and only the staff (the kernel) are allowed to hold the sharp tools (the hardware).</div>
+  </section>
+
+  <!-- DEEP DIVE: PRIVILEGE & SYSCALLS -->
+  <section>
+    <span class="eyebrow reveal">◆ Deep dive</span>
+    <h2 class="reveal">What "privilege" actually means</h2>
+    <p class="lead reveal d1">The wall isn't a metaphor — it's enforced by the CPU itself.</p>
+    <div class="grid g2 reveal d1" style="margin-top:1rem;align-items:start">
+      <div class="card">
+        <h3>Two hardware modes</h3>
+        <p>ARM CPUs run code at different <b>exception levels</b>. Your app runs at a low level (EL0) where
+        privileged instructions and raw device memory are simply <i>illegal</i>. The kernel runs at a higher
+        level (EL1) where they're allowed. Try to touch a register from EL0 and the CPU faults — the kernel
+        kills your process instead of letting it corrupt the system.</p>
+      </div>
+      <div class="card">
+        <h3>Virtual memory keeps you boxed in</h3>
+        <p>Each process sees its own private address space via the MMU. Your pointers can't even <i>name</i>
+        another process's memory or the hardware, so a bug in the car app can't scribble over Wi-Fi or the
+        motor driver. Isolation = reliability.</p>
+      </div>
+    </div>
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> The chip has a <i>grown-ups-only</i> switch. Your app is a toddler: reach for the sharp tools and the chip smacks its hand (a fault) and stops it — only the kernel gets grown-up powers. And every app is locked in its own sealed playroom (virtual memory), so one app tripping can't knock over another.</div>
+
+    <div class="deep reveal">
+      <h4>Anatomy of a system call</h4>
+      <ol class="steps">
+        <li><b>Your app</b> calls a C library function (e.g. <code>ioctl(fd, …)</code>).</li>
+        <li>The library loads a <b>syscall number</b> + arguments into registers and executes the
+          <code>svc</code> ("supervisor call") instruction.</li>
+        <li>The CPU <b>traps</b> into the kernel at EL1 and jumps to the syscall handler.</li>
+        <li>The kernel validates the request, does the privileged work (writes the GPIO register through the
+          driver), and returns a result.</li>
+        <li>Control returns to your app at EL0, as if the function simply returned.</li>
+      </ol>
+      <p class="mini">That round-trip is measured in <b>microseconds</b> — negligible once, but it adds up if
+        you do it thousands of times per second in a tight loop.</p>
+    </div>
+  </section>
+
+  <!-- REAL INTERFACES -->
+  <section>
+    <span class="eyebrow reveal">◆ The real files your app opens</span>
+    <h2 class="reveal">In Linux, hardware looks like files</h2>
+    <p class="lead reveal d1">"Everything is a file" is Linux's superpower. Your car talks to hardware by
+    opening special files under <code>/dev</code> and making syscalls on them.</p>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> Linux pretends every gadget is just a file. Want to talk to the motor chip? You <b>open</b> a file and <b>write</b> to it — exactly like scribbling in a notepad. The same open / read / write moves work for a pin, a sensor, or a plain text file.</div>
+
+    <div class="reveal d1" data-tabs style="margin-top:1rem">
+      <div class="tabs">
+        <button>GPIO (motors)</button>
+        <button>I²C (the IMU)</button>
+        <button>sysfs vs chardev</button>
+      </div>
+      <div class="tabpane">
+        <div class="card">
+          <p>Modern GPIO uses the <b>character device</b> <code>/dev/gpiochip0</code>. Your app opens it,
+          requests specific lines, and sets their values — all via <code>ioctl</code> under the hood. The
+          <code>libgpiod</code> library gives a clean Python API:</p>
+          <pre class="code"><span class="kw">import</span> gpiod
+chip = gpiod.Chip(<span class="st">"/dev/gpiochip0"</span>)
+line = chip.request_lines({<span class="st">17</span>: gpiod.LineSettings(
+           direction=gpiod.line.Direction.OUTPUT)})
+line.set_value(<span class="st">17</span>, gpiod.line.Value.ACTIVE)  <span class="cm"># pin 17 → HIGH → motor</span></pre>
+        </div>
+      </div>
+      <div class="tabpane">
+        <div class="card">
+          <p>The MPU6050 IMU sits on an <b>I²C bus</b>, exposed as <code>/dev/i2c-1</code>. You address the
+          chip (0x68), then read/write its registers. <code>smbus2</code> wraps the syscalls:</p>
+          <pre class="code"><span class="kw">from</span> smbus2 <span class="kw">import</span> SMBus
+bus = SMBus(<span class="st">1</span>)                 <span class="cm"># /dev/i2c-1</span>
+bus.write_byte_data(<span class="st">0x68</span>, <span class="st">0x6B</span>, <span class="st">0</span>)  <span class="cm"># wake the IMU</span>
+hi = bus.read_byte_data(<span class="st">0x68</span>, <span class="st">0x43</span>)   <span class="cm"># gyro X high byte</span></pre>
+          <p class="mini">Two wires (SDA + SCL) can host <i>many</i> devices, each at its own address — that's
+          why I²C is everywhere in robotics.</p>
+        </div>
+      </div>
+      <div class="tabpane">
+        <div class="card">
+          <p>Older code toggled pins by writing text to <code>/sys/class/gpio/…</code> (the <b>sysfs</b>
+          interface). It's deprecated: slow, racy, and it can't atomically claim a pin.</p>
+          <p>The modern <b>character-device</b> interface (<code>/dev/gpiochip*</code> via libgpiod) is
+          faster, safer, and lets one process own a line exclusively. We use it throughout the course.</p>
+          <span class="chip rose">sysfs = old</span><span class="chip lime">chardev = modern</span>
+        </div>
+      </div>
+    </div>
+    <div class="note tip reveal">This is the concrete answer to "how does my app reach the hardware?" — it
+      <b>opens a device file and makes syscalls</b>. The library and kernel driver do the rest.</div>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> I²C is a two-wire party line: many gadgets share the same two wires, and each one has its own name (its <b>address</b>, like <code>0x68</code>). You call out the name first, so everyone knows exactly who you're talking to.</div>
+  </section>
+
+  <!-- WATCH A SYSCALL -->
+  <section>
+    <span class="eyebrow reveal">◆ Watch it happen</span>
+    <h2 class="reveal">See your Python line become a kernel request</h2>
+    <p class="lead reveal d1"><code>strace</code> prints every system call a program makes. Here's exactly what
+    scrolls by when the app claims a GPIO line and drives it high — read it top to bottom:</p>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> <code>strace</code> is a baby monitor for your program: it prints a line every time the program asks the kernel for something — so you can hear exactly what it's doing, even when the program itself says nothing on screen.</div>
+
+    <div class="term reveal d1" style="margin-top:1rem" data-type='[
+      ["$ strace -f -e trace=openat,ioctl python3 drive.py\n","c",12],
+      ["# 1) open the GPIO character device (get a file descriptor)\n","m",7],
+      ["openat(AT_FDCWD, \"/dev/gpiochip0\", O_RDWR) = 3\n","g",5],
+      ["# 2) ask the kernel: what lines does this chip have?\n","m",7],
+      ["ioctl(3, GPIO_GET_CHIPINFO_IOCTL, {name=\"gpiochip0\", lines=58}) = 0\n","g",5],
+      ["# 3) request line 17 as an output, receive a handle (fd 4)\n","m",7],
+      ["ioctl(3, GPIO_V2_GET_LINE_IOCTL, {offsets=[17], flags=OUTPUT}) = 0\n","g",5],
+      ["# 4) set the line HIGH -> 3.3V on the pin -> motor turns\n","m",7],
+      ["ioctl(4, GPIO_V2_LINE_SET_VALUES_IOCTL, {bits=1}) = 0\n","v",5],
+      ["\n$ ","g",24],["# four syscalls -- the whole \"stack\", made visible_","",26]
+    ]'>
+      <div class="bar"><i></i><i></i><i></i><span>strace — userspace ↔ kernel</span></div>
+      <div class="body"></div>
+    </div>
+    <div class="note tip reveal">There is <b>no magic</b>: <code>openat</code> hands back a file descriptor,
+      then each <code>ioctl</code> carries a request across the syscall doorway into the kernel driver — the
+      exact journey the animation above illustrated.</div>
+  </section>
+
+  <!-- DEPENDENCIES -->
+  <section id="deps">
+    <span class="eyebrow reveal">◆ Build system</span>
+    <h2 class="reveal">Declaring what the app needs</h2>
+    <p class="lead reveal d1">Our app imports <code>gpiod</code> and <code>smbus2</code>. If those aren't in
+    the image, it crashes at start. The recipe declares them as <b>runtime dependencies</b> so BitBake
+    guarantees they're installed.</p>
+
+    <div class="reveal d2" data-tabs style="margin-top:1rem">
+      <div class="tabs">
+        <button>recipe (.bb)</button>
+        <button>what it pulls in</button>
+        <button>the failure it prevents</button>
+      </div>
+      <div class="tabpane">
+        <div class="term" style="box-shadow:none"><div class="bar"><i></i><i></i><i></i>
+          <span>car-training-app_1.0.bb</span></div>
+          <div class="body"><span class="m"># runtime deps: present on the device, not just at build</span>
+RDEPENDS:${PN} = "python3 python3-gpiod python3-smbus2"
+SYSTEMD_SERVICE:${PN} = "car-training.service"
+SYSTEMD_AUTO_ENABLE = "enable"</div></div>
+      </div>
+      <div class="tabpane">
+        <div class="card">
+          <p><code>python3-gpiod</code> → drives GPIO pins (motors)<br>
+          <code>python3-smbus2</code> → talks I²C to the MPU6050 IMU<br>
+          <code>python3</code> → the interpreter itself</p>
+          <span class="chip cyan">meta-openembedded / meta-python</span>
+        </div>
+      </div>
+      <div class="tabpane">
+        <div class="term" style="box-shadow:none"><div class="bar"><i></i><i></i><i></i>
+          <span>if a dep is missing…</span></div>
+          <div class="body"><span class="c">$ ./main.py web</span>
+<span style="color:var(--rose)">ModuleNotFoundError: No module named 'gpiod'</span>
+<span class="m"># fix: add it to RDEPENDS and rebuild the image</span></div></div>
+      </div>
+    </div>
+    <div class="note warn reveal"><b>Build vs runtime:</b> a build dependency (<code>DEPENDS</code>) is needed
+      to <i>compile</i>; a runtime dependency (<code>RDEPENDS</code>) must be <i>on the device</i>. Our
+      Python deps are runtime — a classic beginner trap.</div>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> <b>DEPENDS</b> = ingredients you need to <i>cook</i> the meal. <b>RDEPENDS</b> = things that must be <i>on the table when you eat</i>. Forget the fork (a runtime dep) and dinner fails at the table — even though the cooking went perfectly.</div>
+  </section>
+
+  <!-- LAYERS DEEP DIVE -->
+  <section>
+    <span class="eyebrow reveal">◆ Deep dive</span>
+    <h2 class="reveal">How layers map onto the stack</h2>
+    <p class="lead reveal d1">Each layer of the Linux system is <i>owned</i> by a Yocto layer. That's the
+    elegant symmetry of this whole course.</p>
+    <div class="card reveal d1" style="margin-top:1rem">
+      <table class="data">
+        <tr><th>Linux layer</th><th>Provided by (Yocto layer)</th><th>Examples</th></tr>
+        <tr><td>Your application</td><td><code>meta-car-training</code></td><td>the car app + service</td></tr>
+        <tr><td>Libraries</td><td><code>meta-openembedded</code> / meta-python</td><td>libgpiod, smbus2, numpy</td></tr>
+        <tr><td>C library + init</td><td><code>poky</code> (core)</td><td>glibc, systemd, BusyBox</td></tr>
+        <tr><td>Kernel + driver</td><td><b>BSP</b>: meta-raspberrypi / meta-yocto-bsp</td><td>SoC GPIO/I²C drivers</td></tr>
+        <tr><td>Bootloader + DT</td><td><b>BSP</b></td><td>Pi firmware / U-Boot, .dtb</td></tr>
+      </table>
+    </div>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> Every floor of the Linux building is built by one Yocto crew. The <b>BSP</b> (“board support package”) is the crew that knows <i>this exact board</i> — its pins, its chips, its wiring — so swapping to a different board mostly means swapping that one crew.</div>
+
+    <div class="grid g2 reveal d1" style="margin-top:1.2rem">
+      <div class="deep"><h4>Layer priority</h4><p>When two layers define the same recipe, the one with higher
+        <code>BBFILE_PRIORITY</code> wins. This lets a board layer override a generic default without editing
+        the original — powerful and dangerous.</p></div>
+      <div class="deep"><h4>.bbappend — extend, don't fork</h4><p>To tweak someone else's recipe, drop a
+        <code>foo_%.bbappend</code> in your layer. It <i>appends</i> to their recipe, so you customise the
+        kernel or a package while staying upgrade-friendly.</p></div>
+    </div>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> You love a friend's recipe but want extra cheese. Instead of rewriting their whole card, you staple on a sticky note saying “+ cheese.” That sticky note is a <b>.bbappend</b> — you tweak their recipe without ever touching the original.</div>
+
+    <div class="deep reveal"><h4>PROVIDES / RPROVIDES — the flip side of dependencies</h4>
+      <p>A dependency is only satisfiable if some recipe <b>provides</b> it. The infamous
+      <code>Nothing RPROVIDES 'python3-libgpiod'</code> error means: "you asked for a runtime package that no
+      layer offers." The fix is to name the package that <i>does</i> exist (<code>python3-gpiod</code>) — or
+      add the layer that provides it. Dependencies and provides are two ends of the same rope.</p></div>
+
+    <div class="eli5 reveal"><span class="lbl">🍼 In plain words</span> You ask the shop for “fizzy water,” but their shelf label says “sparkling water.” Same drink, wrong name — so the till says “we don't stock that.” The fix is to ask for the name that actually exists.</div>
+  </section>
+
+  <!-- LAB -->
+  <section>
+    <span class="eyebrow reveal">◆ Hands-on lab · ~40 min</span>
+    <h2 class="reveal">See the layers for real (on the board)</h2>
+    <ol class="steps reveal d1">
+      <li><b>Hardware as files.</b> List the device nodes the app uses:
+        <pre class="code">ls -l /dev/gpiochip* /dev/i2c-*</pre></li>
+      <li><b>Scan the I²C bus</b> and find the IMU at address 0x68:
+        <pre class="code">i2cdetect -y 1        <span class="cm"># 0x68 should appear in the grid</span></pre></li>
+      <li><b>Toggle a pin from the shell</b> with the libgpiod CLI (no code needed):
+        <pre class="code">gpioinfo | head            <span class="cm"># list lines &amp; who owns them</span>
+gpioset gpiochip0 17=1     <span class="cm"># drive line 17 HIGH</span></pre></li>
+      <li><b>Watch a syscall happen.</b> Trace the exact kernel calls the app makes:
+        <pre class="code">strace -e trace=ioctl,openat python3 -c \
+  "import gpiod; gpiod.Chip('/dev/gpiochip0')"</pre></li>
+      <li><b>Break it on purpose.</b> Rename the <code>gpiod</code> module, start the app, and read the
+        <code>ModuleNotFoundError</code> — then map it back to the missing <code>RDEPENDS</code>.</li>
+    </ol>
+    <div class="win reveal"><b>Aha moment:</b> when you see <code>openat("/dev/gpiochip0")</code> and
+      <code>ioctl(...)</code> scroll past in <code>strace</code>, you're literally watching your Python line
+      become a kernel request. The whole stack, made visible.</div>
+  </section>
+
+  <!-- AI-ASSISTED CHALLENGE -->
+  <section id="challenge">
+    <span class="eyebrow reveal">◆ Second half · do it yourself, with AI as a copilot</span>
+    <h2 class="reveal">Extend the system — pick one and go</h2>
+    <p class="lead reveal d1">Now you use everything we just saw. Pick one of the two challenges below and
+    take it as far as you can in the remaining time. <b>Use AI and web search as a real engineer does</b>:
+    ask for guidance, read the answer critically, verify against the Yocto manual, then commit code.
+    I'll circulate, unblock you, and review what you find.</p>
+
+    <div class="grid g2 reveal d1" style="margin-top:1.2rem;align-items:start">
+      <div class="card" style="border-color:rgba(34,211,238,.4)">
+        <div class="num" style="color:var(--cyan)">CHALLENGE A · lighter</div>
+        <h3>🔧 Modify something in a layer</h3>
+        <p>Bend an existing recipe or config without forking it. Some ideas to pick from:</p>
+        <ul>
+          <li>Change the <b>hostname</b> or <b>MOTD banner</b> shown at login via a <code>.bbappend</code>
+            in <code>meta-car-training</code>.</li>
+          <li>Add a <b>package</b> you actually want (e.g. <code>htop</code>, <code>tmux</code>,
+            <code>vim</code>) to the image recipe and rebuild only the delta.</li>
+          <li>Change a <b>systemd unit</b> so the car service restarts on failure with a longer back-off.</li>
+          <li>Bump a <b>kernel config</b> flag through a <code>.bbappend</code> of
+            <code>linux-raspberrypi</code>.</li>
+        </ul>
+        <p class="mini">Prompt hint: “In Yocto scarthgap, write a <code>.bbappend</code> that…” then
+        verify the answer against <a href="https://docs.yoctoproject.org" target="_blank" rel="noopener">docs.yoctoproject.org</a>.</p>
+      </div>
+
+      <div class="card" style="border-color:rgba(163,230,53,.4)">
+        <div class="num" style="color:var(--lime)">CHALLENGE B · heavier</div>
+        <h3>🧩 Introduce a custom kernel driver</h3>
+        <p>Add a tiny <b>out-of-tree kernel module</b> that registers a character device (say
+        <code>/dev/hello0</code>) and returns a string when read. This is the on-ramp to writing real
+        drivers for the sensors in Session&nbsp;4.</p>
+        <ol>
+          <li>Create a new <code>recipes-kernel/hello-mod/</code> folder in <code>meta-car-training</code>.</li>
+          <li>Write a <b>~30-line C module</b> (<code>module_init</code> +
+            <code>register_chrdev</code> + <code>file_operations.read</code>).</li>
+          <li>Write the <b>Makefile</b> that builds against the kernel headers.</li>
+          <li>Write the <b>Yocto recipe</b> that <code>inherit</code>s <code>module</code> and installs it.</li>
+          <li>Add the module to the image, rebuild, boot, then <code>modprobe hello_mod &amp;&amp; cat /dev/hello0</code>.</li>
+        </ol>
+        <p class="mini">Prompt hint: “Minimal Yocto recipe using the <code>module</code> class for a custom
+        kernel module” + “Linux char device driver skeleton kernel 6.x”.</p>
+      </div>
+    </div>
+
+    <div class="field reveal">
+      <span class="tag">🏭 From the field</span>
+      <h4>AI-assisted development is a skill you have to <em>practise</em></h4>
+      <p>Modern embedded work isn't about memorising the Yocto reference manual — it's about knowing
+      <b>what to ask</b>, <b>how to verify</b>, and <b>when the AI is wrong</b>. Read every generated line;
+      match it against the official docs; try it; iterate. The engineers I hire aren't the ones who
+      remember every syntax — they're the ones who can drive an unfamiliar tool to a working result with
+      confidence and evidence.</p>
+      <div class="sig">— how I actually work on new projects in industry</div>
+    </div>
+  </section>
+
+  <!-- PITFALLS -->
+  <section>
+    <span class="eyebrow reveal">◆ Common traps</span>
+    <div class="grid g2 reveal d1" style="margin-top:1rem">
+      <div class="pitfall"><b>Confusing DEPENDS with RDEPENDS.</b> The app compiles fine but crashes on the
+        board with a missing module — because you declared a build dep instead of a runtime dep.</div>
+      <div class="pitfall"><b>Permission denied on /dev/i2c-1.</b> The bus exists but your user lacks access.
+        On the device you're usually root; off-device, add the user to the <code>i2c</code>/<code>gpio</code>
+        groups.</div>
+      <div class="pitfall"><b>Editing app code, image unchanged.</b> Source is cached; run
+        <code>bitbake -c cleansstate car-training-app</code> before rebuilding.</div>
+      <div class="pitfall"><b>Using deprecated sysfs GPIO.</b> Tutorials still show
+        <code>echo 17 &gt; /sys/class/gpio/export</code>. It's racy and slow — prefer libgpiod.</div>
+    </div>
+  </section>
+
+  <!-- EXERCISES -->
+  <section>
+    <span class="eyebrow reveal">◆ Challenge yourself</span>
+    <h2 class="reveal">Exercises</h2>
+    <div class="grid g3 reveal d1" style="margin-top:1rem">
+      <div class="card"><div class="num">WARM-UP</div><h3>Name the owner</h3><p>For each Linux layer, name
+        the Yocto layer that provides it. Do it from memory, then check the table.</p></div>
+      <div class="card"><div class="num">HANDS-ON</div><h3>Blink from the shell</h3><p>Use
+        <code>gpioset</code> in a loop to blink an LED on a spare pin — no program, pure syscalls.</p></div>
+      <div class="card"><div class="num">STRETCH</div><h3>Add a dependency</h3><p>Add <code>numpy</code> to
+        <code>RDEPENDS</code>, rebuild, and confirm <code>import numpy</code> works on the board.</p></div>
+    </div>
+  </section>
+
+  <!-- PREP FOR NEXT + TAKEAWAYS -->
+  <section id="deliver">
+    <span class="eyebrow reveal">◆ Take-home · required for Session 3</span>
+    <h2 class="reveal">Next up: actuation — come with the theory ready</h2>
+    <p class="lead reveal d1">Session 3 is a build day. You'll present your research in the first hour, then
+    we wire the L298N and drive real motors. Come prepared or you'll only watch.</p>
+
+    <div class="prep next reveal">
+      <span class="eyebrow" style="color:var(--cyan);border-color:rgba(34,211,238,.4)">◆ Research keywords · come prepared</span>
+      <p class="plead">Research these so you can teach them back:</p>
+      <div class="kws">
+        <span class="kw">H-bridge</span><span class="kw">L298N</span><span class="kw">PWM</span>
+        <span class="kw">duty cycle</span><span class="kw">shoot-through</span>
+        <span class="kw">back-EMF</span><span class="kw">differential drive</span>
+        <span class="kw">common ground</span><span class="kw">dead-band</span>
+        <span class="kw">hardware vs software PWM</span>
+      </div>
+      <ul class="qs">
+        <li>Why can't a GPIO pin drive a motor directly? What does the H-bridge add?</li>
+        <li>Two direction pins have four combinations — what does each one do to the motor?</li>
+        <li>How does duty cycle become an <i>effective</i> voltage? What is the dead-band and where does it come from?</li>
+      </ul>
+    </div>
+
+    <div class="field reveal">
+      <span class="tag">🏭 From the field</span>
+      <h4>Reading a datasheet is a professional skill</h4>
+      <p>Before touching hardware I <i>always</i> read the driver-chip datasheet cover to cover — truth
+      table, current limits, thermal, timing. It's boring; it also saves you from magic smoke. Bring the L298N
+      datasheet next session and be able to point to page numbers.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="card reveal" style="border-color:rgba(163,230,53,.4)">
+      <span class="eyebrow" style="color:var(--lime);border-color:rgba(163,230,53,.4)">◆ Takeaways</span>
+      <ul>
+        <li>Every hardware action climbs down: app → library → syscall → kernel → driver → pin.</li>
+        <li>Userspace can't touch hardware directly — it <b>asks</b> the kernel through a syscall.</li>
+        <li>Runtime needs are declared with <code>RDEPENDS</code>; the BSP layer supplies the board-specific bottom.</li>
+      </ul>
+    </div>
+    <div class="pager">
+      <a class="btn ghost" href="session1.html">← Session 1</a>
+      <a class="btn primary" href="session3.html">Session 3 · Actuation →</a>
+    </div>
+  </section>
+
+</div>
+
+<footer class="foot"><div class="wrap">Code &amp; Drive — Level 2 · Session 2</div></footer>
+
+<script src="assets/app.js"></script>
+<script>
+(function(){
+  var DETAIL=[
+    ["Your app · Python","Your code expresses intent — <i>“turn motor A on”.</i> It runs in userspace with no direct hardware access, so it calls a library. This is the only layer <b>you</b> write; it lives in <code>meta-car-training</code>."],
+    ["Library · libgpiod / smbus2","A thin wrapper that packages your request into the exact format the kernel expects, then performs the system call. Shipped by <code>meta-openembedded</code>."],
+    ["System call · ioctl()","The guarded doorway from userspace into the kernel. The CPU switches to privileged mode to carry out the request, then returns control to your app."],
+    ["Kernel · GPIO subsystem","A hardware-independent layer inside Linux that receives the request and routes it to the correct driver for your specific chip."],
+    ["Driver","Board-specific code that knows the SoC. It writes the actual hardware register. Supplied by the <b>BSP layer</b> (meta-raspberrypi / meta-yocto-bsp)."],
+    ["Hardware · the pin","The physical GPIO now reads 3.3&nbsp;V. That feeds the L298N H-bridge, which switches battery power to the motor. Metal moves!"]
+  ];
+  var detail=document.getElementById("detail");
+  var layers=[].slice.call(document.querySelectorAll("#lstack .layer"));
+  layers.forEach(function(L){
+    L.addEventListener("click",function(){
+      layers.forEach(function(x){x.classList.remove("hot");});
+      L.classList.add("hot");
+      var d=DETAIL[+L.getAttribute("data-i")];
+      detail.innerHTML="<h3>"+d[0]+"</h3><p class='lead' style='font-size:.98rem'>"+d[1]+"</p>";
+    });
+  });
+  document.getElementById("fire").onclick=function(){
+    var stack=document.getElementById("lstack");
+    [].slice.call(stack.querySelectorAll(".sigflow")).forEach(function(n){n.remove();});
+    layers.forEach(function(x){x.classList.remove("hot");});
+    var STEP=560;
+    layers.forEach(function(L,i){
+      var spark=L.querySelector(".spark");
+      setTimeout(function(){
+        layers.forEach(function(x){x.classList.remove("hot");});
+        L.classList.add("hot"); spark.style.opacity="1";
+        spark.animate([{transform:"translateY(-6px)"},{transform:"translateY(6px)"}],{duration:220});
+        setTimeout(function(){ spark.style.opacity="0"; },300);
+        // traveling arrow: appears at this layer, glides to the next, vanishes
+        if(i<layers.length-1){
+          var a=document.createElement("div"); a.className="sigflow"; a.textContent="▼";
+          stack.appendChild(a);
+          var y0=L.offsetTop+L.offsetHeight-18, y1=layers[i+1].offsetTop-6;
+          a.animate([
+            {transform:"translate(-50%,"+y0+"px)",opacity:0},
+            {transform:"translate(-50%,"+(y0+6)+"px)",opacity:1,offset:.18},
+            {transform:"translate(-50%,"+(y1-6)+"px)",opacity:1,offset:.82},
+            {transform:"translate(-50%,"+y1+"px)",opacity:0}
+          ],{duration:STEP-90,easing:"linear"});
+          setTimeout(function(){ a.remove(); },STEP-60);
+        }
+        if(i===5){ L.click();
+          detail.innerHTML="<h3 style='color:var(--lime)'>⚡ Pin is HIGH — motor spins!</h3>"+
+            "<p class='lead' style='font-size:.98rem'>Round trip complete. That whole journey happens in "+
+            "microseconds, thousands of times a second.</p>"; }
+      }, i*STEP);
+    });
+  };
+})();
+</script>
+<script src="assets/deck.js"></script>
+</body>
+</html>
