@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S3 · Actuation — Making the Car Move</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/deck.css">
+</head>
+<body>
+<div class="progress"></div>
+<header class="topbar">
+  <div class="brand"><span class="dot"></span> Code&nbsp;&amp;&nbsp;Drive <small>· Lvl 2</small></div>
+  <nav>
+    <a href="index.html">Home</a><a href="session1.html">S1</a><a href="session2.html">S2</a>
+    <a href="session3.html">S3</a><a href="session4.html">S4</a><a href="session5.html">S5</a><a href="session6.html">S6</a>
+  </nav>
+</header>
+
+<div class="wrap deck">
+
+  <section class="hero" style="min-height:78vh">
+    <div class="reveal">
+      <div class="kicker">SESSION 03 · 4 HOURS</div>
+      <h1>Actuation — <span class="grad">make it move</span></h1>
+      <p class="lead reveal d1">A GPIO pin can't power a motor. Today you'll learn the H-bridge that stands
+      between them, how <b>PWM</b> controls speed, and you'll drive a live motor from the browser.</p>
+      <div class="hero-actions reveal d2">
+        <a class="btn primary" href="#drive">Drive it →</a>
+        <a class="btn ghost" href="#pwm">What is PWM?</a>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow reveal">◆ Learning objectives</span>
+    <div class="card reveal d1" style="margin-top:1rem">
+      <div class="obj"><div class="k">1</div><div><b>Why a driver chip?</b> A GPIO gives milliamps; a motor
+        wants amps. The L298N H-bridge does the muscle.</div></div>
+      <div class="obj"><div class="k">2</div><div><b>Direction.</b> Two control pins per motor decide
+        forward, reverse, brake or coast.</div></div>
+      <div class="obj"><div class="k">3</div><div><b>Speed = PWM.</b> Switch the enable pin on/off fast; the
+        <i>duty cycle</i> sets the effective voltage.</div></div>
+      <div class="obj" style="border:none"><div class="k">4</div><div><b>From Linux.</b> Map high-level commands
+        (forward/left/right/stop) to pin states in your app.</div></div>
+    </div>
+  </section>
+
+  <!-- AGENDA -->
+  <section>
+    <span class="eyebrow reveal">◆ How we'll spend the 4 hours</span>
+    <h2 class="reveal">Today's agenda</h2>
+    <div class="card reveal d1">
+      <div class="agenda">
+        <div class="slot"><span class="min">0:00–0:45</span><div class="what"><b>Inside the H-bridge</b>
+          <span>Four switches, current paths, and the shoot-through you must avoid.</span></div></div>
+        <div class="slot"><span class="min">0:45–1:30</span><div class="what"><b>PWM in depth</b>
+          <span>Frequency vs duty, hardware vs software PWM, and motor whine.</span></div></div>
+        <div class="slot"><span class="min">1:30–1:45</span><div class="what"><b>☕ Break</b><span></span></div></div>
+        <div class="slot"><span class="min">1:45–2:30</span><div class="what"><b>Differential drive</b>
+          <span>How left/right wheel speeds turn the car — skid steering.</span></div></div>
+        <div class="slot"><span class="min">2:30–3:30</span><div class="what"><b>Wiring lab</b>
+          <span>Connect the L298N, drive each direction, find the dead-band, tune.</span></div></div>
+        <div class="slot"><span class="min">3:30–4:00</span><div class="what"><b>Pitfalls, exercises, quiz</b>
+          <span>Brown-outs, common ground, back-EMF — and the checkpoint.</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLIPPED FORMAT + ARCH MAP -->
+  <section id="where">
+    <span class="eyebrow reveal">◆ Before we wire anything · how today runs</span>
+    <h2 class="reveal">You present the theory — then we make wheels spin</h2>
+    <p class="lead reveal d1">You came with the L298N datasheet and a story for H-bridge, PWM and duty
+    cycle. First hour: <b>you teach it back</b> and defend it. I'll drop in the industrial context and the
+    failure modes I've actually seen (magic smoke included). Then we <b>wire the board, drive each direction,
+    find the dead-band, and tune</b>. You do it; I show you my version; I review yours.</p>
+
+    <div class="sflow reveal d1">
+      <div class="step"><div class="n">01 · before class</div><h4>You researched</h4>
+        <p>H-bridge, L298N truth table, PWM/duty, shoot-through, back-EMF, differential drive.</p></div>
+      <div class="step you"><div class="n">02 · first hour</div><h4>You present</h4>
+        <p>Explain a keyword with a diagram or datasheet page; peers challenge.</p></div>
+      <div class="step"><div class="n">03 · on the bench</div><h4>We drive it</h4>
+        <p>Wire L298N, test 4 directions, find the dead-band, calibrate motor trim.</p></div>
+      <div class="step"><div class="n">04 · leaving</div><h4>Next brief</h4>
+        <p>Keywords for Session 4 (sensing) and your next deliverable.</p></div>
+    </div>
+
+    <h3 class="reveal" style="margin-top:1.8rem">Where we are in the stack today</h3>
+    <p class="lead reveal d1">Session 2 opened the middle. Today we push all the way to the bottom: <b>the
+    kernel driver and the actuation hardware</b>. Your Python from S2 finally moves metal.</p>
+    <div class="archmap reveal d1">
+      <div class="lyr"><div><div class="t">🧠 Application — the AI</div>
+        <div class="s">features → model → action</div></div><span class="badge">Session 5</span></div>
+      <div class="lyr here"><div><div class="t">🎚️ Abstraction — actuator API</div>
+        <div class="s">forward() / left() / stop() — you write this today</div></div>
+        <span class="badge">◀ today</span></div>
+      <div class="lyr done"><div><div class="t">📚 User-space libraries</div>
+        <div class="s">libgpiod — opens /dev/gpiochip0</div></div>
+        <span class="badge">✓ Session 2</span></div>
+      <div class="lyr done"><div><div class="t">🚪 System-call interface</div>
+        <div class="s">ioctl() sets pin state &amp; PWM</div></div>
+        <span class="badge">✓ Session 2</span></div>
+      <div class="lyr here"><div><div class="t">⚙️ Kernel GPIO/PWM subsystem + driver</div>
+        <div class="s">writes the SoC register that toggles the pin</div></div>
+        <span class="badge">◀ today</span></div>
+      <div class="lyr done"><div><div class="t">🧱 Board support &amp; the image</div>
+        <div class="s">device tree exposes the GPIO controller</div></div>
+        <span class="badge">✓ Session 1</span></div>
+      <div class="lyr here"><div><div class="t">🔌 Hardware — L298N + motors</div>
+        <div class="s">H-bridge amplifies GPIO into motor current</div></div>
+        <span class="badge">◀ today</span></div>
+    </div>
+    <div class="field reveal">
+      <span class="tag">🏭 From the field</span>
+      <h4>Every actuator I ever shipped had this same layered story</h4>
+      <p>Motor, valve, LED strip — the shape is always the same: a high-level command in your app becomes a
+      pin toggle through a driver, which then drives a power stage that moves real energy. Get the pattern
+      once and you own it for life. Also: <b>always</b> bench-test a new driver chip with a current-limited
+      supply before the battery goes on. I've released more magic smoke than I'd like to admit.</p>
+      <div class="sig">— hard-won lesson from actual robot builds</div>
+    </div>
+  </section>
+
+  <!-- WHY H-BRIDGE -->
+  <section>
+    <span class="eyebrow reveal">◆ Concept</span>
+    <h2 class="reveal">The GPIO can't do it alone</h2>
+    <div class="primer reveal">
+      <span class="eyebrow">◆ Words first</span>
+      <p class="plead">Five words before we wire anything:</p>
+      <dl>
+        <dt>GPIO</dt><dd>General-Purpose Input/Output — a pin your program can switch HIGH or LOW.
+          <span class="lit">A tiny software-controlled light switch.</span></dd>
+        <dt>H-bridge</dt><dd>A circuit of four switches that can send current through a motor <em>either</em>
+          direction. <span class="lit">Named for its “H” shape.</span></dd>
+        <dt>Motor driver (L298N)</dt><dd>The chip containing the H-bridge; it takes weak logic signals and
+          switches the strong motor power. <span class="lit">A power amplifier for movement.</span></dd>
+        <dt>PWM (duty cycle)</dt><dd>Switching a pin on/off very fast; the <b>%</b> of time it's on (duty
+          cycle) sets the speed. <span class="lit">Flicking a light to “dim” it.</span></dd>
+        <dt>Common ground</dt><dd>Connecting the 0&nbsp;V of two power sources so they share a reference.
+          <span class="lit">Without it, signals mean nothing.</span></dd>
+      </dl>
+    </div>
+    <div class="grid g3 reveal d1" style="margin-top:1rem">
+      <div class="card"><h3>⚡ Power gap</h3><p>A Pi pin sources ~16&nbsp;mA at 3.3&nbsp;V. A motor pulls
+        hundreds of mA at 6–12&nbsp;V. Connect them directly and you fry the pin.</p></div>
+      <div class="card"><h3>🔀 Direction</h3><p>To reverse a motor you must swap which terminal is + and
+        which is −. An <b>H-bridge</b> does that with four switches.</p></div>
+      <div class="card"><h3>🛡️ Isolation</h3><p>The L298N keeps the noisy, high-current motor side away
+        from your delicate logic side.</p></div>
+    </div>
+  </section>
+
+  <!-- H-BRIDGE TRUTH TABLE -->
+  <section>
+    <span class="eyebrow reveal">◆ The control logic</span>
+    <h2 class="reveal">Two pins, four behaviours</h2>
+    <p class="lead reveal d1">Each motor has <code>IN1</code> and <code>IN2</code>. Their combination sets
+    the behaviour; the <code>ENable</code> pin (with PWM) sets the speed.</p>
+    <div class="card reveal d2" style="margin-top:1rem;overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.9rem">
+        <tr style="color:var(--muted);text-align:left">
+          <th style="padding:.5rem">IN1</th><th>IN2</th><th>EN</th><th>Result</th></tr>
+        <tr style="border-top:1px solid var(--line)"><td style="padding:.5rem;color:var(--lime)">HIGH</td>
+          <td style="color:var(--rose)">LOW</td><td class="c">PWM</td><td>▶ Forward</td></tr>
+        <tr style="border-top:1px solid var(--line)"><td style="padding:.5rem;color:var(--rose)">LOW</td>
+          <td style="color:var(--lime)">HIGH</td><td class="c">PWM</td><td>◀ Reverse</td></tr>
+        <tr style="border-top:1px solid var(--line)"><td style="padding:.5rem;color:var(--rose)">LOW</td>
+          <td style="color:var(--rose)">LOW</td><td class="m">x</td><td>⦿ Coast (free spin)</td></tr>
+        <tr style="border-top:1px solid var(--line)"><td style="padding:.5rem;color:var(--lime)">HIGH</td>
+          <td style="color:var(--lime)">HIGH</td><td class="m">x</td><td>⏹ Brake</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- INSIDE THE H-BRIDGE -->
+  <section>
+    <span class="eyebrow reveal">◆ Deep dive</span>
+    <h2 class="reveal">Inside the H-bridge: four switches in an "H"</h2>
+    <p class="lead reveal d1">The name comes from the shape: two pairs of transistor switches with the motor
+    across the middle bar. Which diagonal you close decides which way current — and the motor — flows.</p>
+
+    <div class="grid g2 reveal d1" style="margin-top:1.2rem;align-items:start">
+      <div class="card" style="text-align:center">
+        <svg viewBox="0 0 240 200" width="100%" height="200">
+          <text x="10" y="16" fill="var(--muted)" font-size="12" font-family="monospace">+V</text>
+          <text x="205" y="16" fill="var(--muted)" font-size="12" font-family="monospace">+V</text>
+          <text x="10" y="196" fill="var(--muted)" font-size="12" font-family="monospace">GND</text>
+          <text x="200" y="196" fill="var(--muted)" font-size="12" font-family="monospace">GND</text>
+          <!-- rails -->
+          <line x1="30" y1="24" x2="210" y2="24" stroke="var(--line)" stroke-width="2"/>
+          <line x1="30" y1="176" x2="210" y2="176" stroke="var(--line)" stroke-width="2"/>
+          <!-- switches -->
+          <rect id="s1" x="20" y="50" width="26" height="26" rx="5" fill="rgba(163,230,53,.25)" stroke="var(--lime)"/>
+          <rect id="s2" x="194" y="50" width="26" height="26" rx="5" fill="rgba(148,164,192,.12)" stroke="var(--line)"/>
+          <rect id="s3" x="20" y="124" width="26" height="26" rx="5" fill="rgba(148,164,192,.12)" stroke="var(--line)"/>
+          <rect id="s4" x="194" y="124" width="26" height="26" rx="5" fill="rgba(163,230,53,.25)" stroke="var(--lime)"/>
+          <text x="16" y="46" fill="var(--muted)" font-size="11" font-family="monospace">Q1</text>
+          <text x="190" y="46" fill="var(--muted)" font-size="11" font-family="monospace">Q2</text>
+          <text x="16" y="168" fill="var(--muted)" font-size="11" font-family="monospace">Q3</text>
+          <text x="190" y="168" fill="var(--muted)" font-size="11" font-family="monospace">Q4</text>
+          <!-- motor -->
+          <line x1="33" y1="76" x2="33" y2="124" stroke="var(--cyan)" stroke-width="2"/>
+          <line x1="207" y1="76" x2="207" y2="124" stroke="var(--cyan)" stroke-width="2"/>
+          <line x1="33" y1="100" x2="90" y2="100" stroke="var(--cyan)" stroke-width="2"/>
+          <line x1="150" y1="100" x2="207" y2="100" stroke="var(--cyan)" stroke-width="2"/>
+          <circle cx="120" cy="100" r="30" fill="#0e1730" stroke="var(--cyan)" stroke-width="2"/>
+          <text x="110" y="105" fill="var(--cyan)" font-size="16" font-family="monospace">M</text>
+          <!-- current path -->
+          <path id="flow" d="M33,24 L33,100 L120,100 L207,100 L207,176"
+                fill="none" stroke="var(--lime)" stroke-width="3" stroke-dasharray="6 6" class="dash"/>
+        </svg>
+        <div style="display:flex;gap:.5rem;justify-content:center;margin-top:.4rem">
+          <button class="btn" id="fwdBtn">▶ Forward diagonal</button>
+          <button class="btn" id="revBtn">◀ Reverse diagonal</button>
+        </div>
+      </div>
+      <div>
+        <div class="deep"><h4>Why never close one side's top &amp; bottom together</h4>
+          <p>If Q1 <i>and</i> Q3 are on at once, you connect +V straight to GND through the transistors — a
+          dead short called <b>shoot-through</b>. It dumps huge current and can destroy the chip in
+          milliseconds. That's exactly why <code>IN1=HIGH, IN2=HIGH</code> is used only briefly as an active
+          brake, never as a drive state.</p></div>
+        <div class="deep"><h4>Flyback / back-EMF</h4>
+          <p>A motor is a coil; when you switch it off, its magnetic field collapses and shoves current
+          backward. Protection diodes (built into the L298N) give that surge a safe path. Without them, the
+          spike fries transistors. This is also why braking hard can momentarily <i>generate</i> voltage.</p></div>
+        <div class="pitfall"><b>The L298N tax:</b> it's an old bipolar design that drops ~1.5–2&nbsp;V and
+          runs hot. Modern MOSFET drivers (TB6612FNG, DRV8833) waste far less. Good to know for a competition
+          where every volt of speed counts.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INTERACTIVE DRIVE -->
+  <section id="drive">
+    <span class="eyebrow reveal">◆ Interactive lab</span>
+    <h2 class="reveal">Drive the car 🚗</h2>
+    <p class="lead reveal d1">These buttons are exactly what the web dashboard sends. Watch the wheels — and
+    the pin states — respond. Slide the throttle to change the PWM duty cycle.</p>
+
+    <div class="grid g2 reveal d2" style="margin-top:1.2rem;align-items:start">
+      <div class="card" style="text-align:center">
+        <svg viewBox="0 0 260 200" width="100%" height="210" aria-hidden="true">
+          <rect x="70" y="55" width="120" height="90" rx="16" fill="#101c3a" stroke="#22d3ee"/>
+          <rect x="95" y="30" width="70" height="34" rx="8" fill="#0e1730" stroke="#a855f7"/>
+          <circle cx="130" cy="188" r="6" fill="#fbbf24" class="pulse"/>
+          <!-- 4 wheels -->
+          <circle id="w1" cx="60" cy="70" r="20" fill="#0a1225" stroke="#a3e635" stroke-width="4"/>
+          <circle id="w2" cx="200" cy="70" r="20" fill="#0a1225" stroke="#a3e635" stroke-width="4"/>
+          <circle id="w3" cx="60" cy="140" r="20" fill="#0a1225" stroke="#a3e635" stroke-width="4"/>
+          <circle id="w4" cx="200" cy="140" r="20" fill="#0a1225" stroke="#a3e635" stroke-width="4"/>
+          <!-- spokes -->
+          <g id="spokes"></g>
+        </svg>
+        <div class="readout" id="state" style="margin-top:.4rem">STOPPED</div>
+      </div>
+
+      <div class="card">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;max-width:260px;margin:0 auto">
+          <span></span><button class="btn" data-cmd="forward">▲</button><span></span>
+          <button class="btn" data-cmd="left">◀</button>
+          <button class="btn primary" data-cmd="stop">■</button>
+          <button class="btn" data-cmd="right">▶</button>
+          <span></span><button class="btn" data-cmd="back">▼</button><span></span>
+        </div>
+        <div style="margin-top:1.4rem">
+          <label style="display:flex;justify-content:space-between">
+            <span>Throttle (PWM duty)</span><span class="readout" id="duty">60%</span></label>
+          <input class="slider" type="range" min="0" max="100" value="60" id="throttle">
+        </div>
+        <div class="term" style="box-shadow:none;margin-top:1rem"><div class="bar"><i></i><i></i><i></i>
+          <span>pin state</span></div>
+          <div class="body" id="pins"><span class="m">idle — all pins LOW</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PWM EXPLAINER -->
+  <section id="pwm">
+    <span class="eyebrow reveal">◆ Deep dive</span>
+    <h2 class="reveal">PWM: fake an analog voltage with a digital pin</h2>
+    <p class="lead reveal d1">A GPIO is only ON or OFF. Flip it thousands of times per second and the motor
+    "feels" the <b>average</b>. Duty cycle = fraction of time it's ON. The bar below animates your current
+    throttle.</p>
+    <div class="card reveal d2" style="margin-top:1rem">
+      <svg viewBox="0 0 600 90" width="100%" height="90">
+        <line x1="0" y1="80" x2="600" y2="80" stroke="var(--line)"/>
+        <polyline id="pwmwave" points="" fill="none" stroke="var(--cyan)" stroke-width="3"/>
+      </svg>
+      <div style="display:flex;justify-content:space-between;color:var(--muted);font-family:var(--mono);font-size:.8rem">
+        <span>0 V effective</span><span class="readout" id="veff">~7.2 V</span><span>12 V effective</span>
+      </div>
+    </div>
+    <div class="note tip reveal">Higher duty = higher average voltage = faster motor. Too low and the motor
+      buzzes but won't turn (it can't overcome friction). That minimum is your car's <b>dead-band</b>.</div>
+  </section>
+
+  <!-- PWM FREQUENCY & SOFT PWM -->
+  <section>
+    <span class="eyebrow reveal">◆ Deep dive</span>
+    <h2 class="reveal">Frequency matters too — and where it comes from</h2>
+    <div class="grid g2 reveal d1" style="margin-top:1rem;align-items:start">
+      <div class="card">
+        <h3>Two independent knobs</h3>
+        <p><b>Duty cycle</b> sets <i>how fast</i> (the average voltage). <b>Frequency</b> sets how often the
+        cycle repeats. Too low a frequency (&lt;100&nbsp;Hz) and the motor jerks and whines audibly; a few
+        hundred Hz to low kHz is the sweet spot for small DC motors.</p>
+        <span class="chip">duty → speed</span><span class="chip cyan">frequency → smoothness</span>
+      </div>
+      <div class="card">
+        <h3>Hardware vs software PWM</h3>
+        <p><b>Hardware PWM</b> is generated by a dedicated timer peripheral — rock-steady, zero CPU. But a
+        board has only a few HW-PWM pins. <b>Software PWM</b> toggles a normal GPIO from a loop or thread;
+        flexible, but the non-real-time scheduler adds jitter that you hear as a wavering whine.</p>
+        <span class="chip lime">HW = steady</span><span class="chip amber">SW = jittery</span>
+      </div>
+    </div>
+    <div class="deep reveal"><h4>What our car actually does</h4>
+      <p>The GPIO backend picks hardware PWM on the enable pins when the board offers it, and falls back to a
+      software-PWM thread (via libgpiod) otherwise. That's a direct consequence of Session&nbsp;2's lesson:
+      the same high-level "set speed 60%" is implemented differently depending on what the <b>driver + board</b>
+      expose — the app doesn't care which.</p></div>
+  </section>
+
+  <!-- DIFFERENTIAL DRIVE -->
+  <section>
+    <span class="eyebrow reveal">◆ Kinematics</span>
+    <h2 class="reveal">How two motors make a turn</h2>
+    <p class="lead reveal d1">Our car has no steering wheel. It steers like a tank: spin the left and right
+    wheels at <i>different</i> speeds/directions. This is <b>differential (skid) drive</b>.</p>
+    <div class="card reveal d1" style="margin-top:1rem">
+      <table class="data">
+        <tr><th>Command</th><th>Left motor</th><th>Right motor</th><th>Result</th></tr>
+        <tr><td>Forward</td><td>+full</td><td>+full</td><td>Straight ahead</td></tr>
+        <tr><td>Gentle left</td><td>+half</td><td>+full</td><td>Curves left</td></tr>
+        <tr><td>Spin left</td><td>−full</td><td>+full</td><td>Rotates in place</td></tr>
+        <tr><td>Stop</td><td>0</td><td>0</td><td>Coast to rest</td></tr>
+      </table>
+    </div>
+    <div class="note tip reveal">Sharp <b>spin</b> turns (wheels opposite) are precise but scrub the tyres and
+      can confuse the IMU; gentle <b>curve</b> turns (one wheel slower) are smoother. Your AI will learn
+      which the human demonstrator preferred.</div>
+  </section>
+
+  <!-- CODE MAPPING -->
+  <section>
+    <span class="eyebrow reveal">◆ From command to pins</span>
+    <h2 class="reveal">The code that moves metal</h2>
+    <p class="lead reveal d1">Everything above collapses into a small, readable driver. The dashboard sends a
+    word; this maps it to pin states and a PWM duty.</p>
+    <pre class="code reveal d1"><span class="cm"># car_control.py (simplified)</span>
+<span class="kw">def</span> <span class="fn">forward</span>(self, speed):
+    self.gpio.set(IN1, HIGH); self.gpio.set(IN2, LOW)   <span class="cm"># left motor fwd</span>
+    self.gpio.set(IN3, HIGH); self.gpio.set(IN4, LOW)   <span class="cm"># right motor fwd</span>
+    self.pwm(ENA, speed);     self.pwm(ENB, speed)      <span class="cm"># duty 0..100</span>
+
+<span class="kw">def</span> <span class="fn">turn_left</span>(self, speed):
+    self.gpio.set(IN1, LOW);  self.gpio.set(IN2, HIGH)  <span class="cm"># left motor reverse</span>
+    self.gpio.set(IN3, HIGH); self.gpio.set(IN4, LOW)   <span class="cm"># right motor fwd → spin left</span>
+    self.pwm(ENA, speed);     self.pwm(ENB, speed)
+
+<span class="kw">def</span> <span class="fn">stop</span>(self):
+    <span class="kw">for</span> pin <span class="kw">in</span> (IN1, IN2, IN3, IN4): self.gpio.set(pin, LOW)  <span class="cm"># coast</span></pre>
+    <div class="win reveal"><b>Notice:</b> the AI model never learns pin numbers. It outputs one of
+      <code>forward / left / right / stop</code>, and <i>this</i> layer turns that into voltages. Clean
+      separation = easy to port to another board.</div>
+  </section>
+
+  <!-- WIRING LAB -->
+  <section>
+    <span class="eyebrow reveal">◆ Hands-on lab · ~60 min</span>
+    <h2 class="reveal">Wire it &amp; tune it</h2>
+    <ol class="steps reveal d1">
+      <li><b>Wire the L298N.</b> Motor supply to <code>+12V</code>/<code>GND</code>, the two motors to OUT1-2
+        and OUT3-4, and <code>IN1..IN4</code> + <code>ENA/ENB</code> to your GPIO pins.</li>
+      <li><b>Share a ground.</b> Connect the L298N GND to the board GND. <b>Without a common ground the logic
+        signals mean nothing</b> — the single most common wiring mistake.</li>
+      <li><b>Test each direction</b> from the dashboard: forward, back, left, right, stop. Confirm both
+        wheels spin the expected way (swap a motor's two wires if one is reversed).</li>
+      <li><b>Find the dead-band.</b> Lower the throttle until a wheel stops turning. That percentage is your
+        minimum useful duty — set <code>MIN_DUTY</code> just above it.</li>
+      <li><b>Match the motors.</b> If the car drifts when told to go straight, one motor is stronger. Add a
+        small trim to the weaker side until it tracks straight.</li>
+    </ol>
+    <div class="pitfall reveal"><b>Brown-out warning:</b> never power the motors from the Pi's 5&nbsp;V pin.
+      A motor's inrush current dips the rail and reboots the board mid-drive. Use a separate battery for the
+      motor supply, joined only at ground.</div>
+  </section>
+
+  <!-- EXERCISES -->
+  <section>
+    <span class="eyebrow reveal">◆ Challenge yourself</span>
+    <h2 class="reveal">Exercises</h2>
+    <div class="grid g3 reveal d1" style="margin-top:1rem">
+      <div class="card"><div class="num">WARM-UP</div><h3>Fill the table</h3><p>Write the IN1–IN4 states for
+        "gentle right" without peeking at the code.</p></div>
+      <div class="card"><div class="num">HANDS-ON</div><h3>Calibrate</h3><p>Measure your car's dead-band and
+        straight-line trim, and record them in <code>config.py</code>.</p></div>
+      <div class="card"><div class="num">STRETCH</div><h3>Ramp, don't jerk</h3><p>Add a soft-start that ramps
+        duty from 0 to target over 200&nbsp;ms to reduce wheel-slip and current spikes.</p></div>
+    </div>
+  </section>
+
+  <!-- PREP FOR NEXT + TAKEAWAYS -->
+  <section id="deliver">
+    <span class="eyebrow reveal">◆ Take-home · required for Session 4</span>
+    <h2 class="reveal">Next up: sensing — come with the physics ready</h2>
+    <p class="lead reveal d1">Session 4 you'll present sensor theory before we open the sensors on the
+    bench. Come prepared to defend the maths.</p>
+
+    <div class="prep next reveal">
+      <span class="eyebrow" style="color:var(--cyan);border-color:rgba(34,211,238,.4)">◆ Research keywords · come prepared</span>
+      <p class="plead">Research these so you can teach them back:</p>
+      <div class="kws">
+        <span class="kw">HC-SR04 (ultrasonic)</span><span class="kw">time-of-flight</span>
+        <span class="kw">trigger / echo pulse</span><span class="kw">speed of sound</span>
+        <span class="kw">MPU6050</span><span class="kw">accelerometer</span><span class="kw">gyroscope</span>
+        <span class="kw">I²C</span><span class="kw">gyro drift / bias</span>
+        <span class="kw">median / low-pass filter</span><span class="kw">scheduler jitter</span>
+        <span class="kw">non-real-time OS</span>
+      </div>
+      <ul class="qs">
+        <li>Derive the ultrasonic distance formula from first principles. Why divide by two?</li>
+        <li>The gyro is silent; why does it still <i>drift</i>? What is bias, and how would you remove it?</li>
+        <li>Why is timing a sensor read on Linux different from timing it on an RTOS? What defends against it?</li>
+      </ul>
+    </div>
+
+    <div class="field reveal">
+      <span class="tag">🏭 From the field</span>
+      <h4>Sensors lie — filters are the professional answer</h4>
+      <p>No sensor gives you the truth. You get a noisy, sometimes-wrong number, and the professional discipline
+      is deciding what to <i>believe</i>: median-of-N, low-pass, dead-band, sanity limits. Come with a
+      preferred filter and be ready to defend it.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="card reveal" style="border-color:rgba(163,230,53,.4)">
+      <span class="eyebrow" style="color:var(--lime);border-color:rgba(163,230,53,.4)">◆ Takeaways</span>
+      <ul>
+        <li>The L298N H-bridge supplies motor current and lets you reverse direction.</li>
+        <li>Two direction pins + one PWM enable pin fully control each motor.</li>
+        <li>Duty cycle sets the effective voltage — that's your throttle, and it has a dead-band.</li>
+      </ul>
+    </div>
+    <div class="pager">
+      <a class="btn ghost" href="session2.html">← Session 2</a>
+      <a class="btn primary" href="session4.html">Session 4 · Sensing →</a>
+    </div>
+  </section>
+
+</div>
+
+<footer class="foot"><div class="wrap">Code &amp; Drive — Level 2 · Session 3</div></footer>
+
+<script src="assets/app.js"></script>
+<script>
+(function(){
+  /* ---- H-bridge diagonal demo ---- */
+  var fwd={on:["s1","s4"],off:["s2","s3"],d:"M33,24 L33,100 L120,100 L207,100 L207,176"};
+  var rev={on:["s2","s3"],off:["s1","s4"],d:"M207,24 L207,100 L120,100 L33,100 L33,176"};
+  function setBridge(cfg){
+    ["s1","s2","s3","s4"].forEach(function(id){
+      var el=document.getElementById(id); if(!el)return;
+      var on=cfg.on.indexOf(id)>=0;
+      el.setAttribute("fill",on?"rgba(163,230,53,.25)":"rgba(148,164,192,.12)");
+      el.setAttribute("stroke",on?"var(--lime)":"var(--line)");
+    });
+    var f=document.getElementById("flow"); if(f) f.setAttribute("d",cfg.d);
+  }
+  var fb=document.getElementById("fwdBtn"), rb=document.getElementById("revBtn");
+  if(fb) fb.onclick=function(){ setBridge(fwd); };
+  if(rb) rb.onclick=function(){ setBridge(rev); };
+
+  var duty=60, dir="stop", wheels=["w1","w2","w3","w4"];
+  var dutyEl=document.getElementById("duty"), stateEl=document.getElementById("state"),
+      pinsEl=document.getElementById("pins"), veff=document.getElementById("veff"),
+      wave=document.getElementById("pwmwave"), spokes=document.getElementById("spokes");
+  // draw spokes on wheels
+  [[60,70],[200,70],[60,140],[200,140]].forEach(function(c,idx){
+    var g=document.createElementNS("http://www.w3.org/2000/svg","line");
+    g.setAttribute("x1",c[0]);g.setAttribute("y1",c[1]-14);g.setAttribute("x2",c[0]);g.setAttribute("y2",c[1]+14);
+    g.setAttribute("stroke","#22d3ee");g.setAttribute("stroke-width","3");
+    g.setAttribute("id","sp"+idx);g.style.transformOrigin=c[0]+"px "+c[1]+"px";
+    spokes.appendChild(g);
+  });
+  var PINS={
+    forward:["IN1=HIGH IN2=LOW","IN3=HIGH IN4=LOW","▶ both motors forward"],
+    back:   ["IN1=LOW  IN2=HIGH","IN3=LOW  IN4=HIGH","◀ both motors reverse"],
+    left:   ["IN1=LOW  IN2=HIGH","IN3=HIGH IN4=LOW","↺ left rev / right fwd"],
+    right:  ["IN1=HIGH IN2=LOW","IN3=LOW  IN4=HIGH","↻ left fwd / right rev"],
+    stop:   ["IN1=LOW  IN2=LOW","IN3=LOW  IN4=LOW","■ coast"]
+  };
+  function drawWave(){
+    var d=duty/100, pts=[], x=0, period=60;
+    for(var c=0;c<10;c++){
+      var onW=period*d;
+      pts.push(x+","+ (d>0?15:80));
+      pts.push((x+onW)+","+(d>0?15:80));
+      pts.push((x+onW)+",80");
+      pts.push((x+period)+",80");
+      x+=period;
+    }
+    wave.setAttribute("points",pts.join(" "));
+    veff.textContent="~"+(12*d).toFixed(1)+" V";
+  }
+  function applySpin(){
+    var moving = dir!=="stop" && duty>0;
+    var dur = moving ? (1.6 - duty/100*1.3).toFixed(2)+"s" : "0s";
+    // sp0=front-left, sp1=front-right, sp2=rear-left, sp3=rear-right (+1 fwd/CW, -1 rev/CCW)
+    var WHEELDIR={
+      forward:[ 1, 1, 1, 1],
+      back:   [-1,-1,-1,-1],
+      left:   [-1, 1,-1, 1],   // left wheels reverse, right wheels forward → pivots left
+      right:  [ 1,-1, 1,-1],   // left wheels forward, right wheels reverse → pivots right
+      stop:   [ 0, 0, 0, 0]
+    };
+    var dirs = WHEELDIR[dir] || [0,0,0,0];
+    for(var i=0;i<4;i++){
+      var sp=document.getElementById("sp"+i);
+      if(!moving || dirs[i]===0){ sp.style.animation="none"; continue; }
+      sp.style.animation = "spin "+dur+" linear infinite" + (dirs[i]<0 ? " reverse" : "");
+    }
+  }
+  function setDir(cmd){
+    dir=cmd;
+    stateEl.textContent = cmd==="stop"?"STOPPED":cmd.toUpperCase()+" @ "+duty+"%";
+    stateEl.style.color = cmd==="stop"?"var(--muted)":"var(--lime)";
+    var p=PINS[cmd];
+    pinsEl.innerHTML="<span class='c'>Motor A</span> "+p[0]+"\n<span class='c'>Motor B</span> "+p[1]+
+      "\n<span class='m'>"+p[2]+"</span>\n<span class='g'>EN = PWM "+duty+"%</span>";
+    applySpin();
+  }
+  document.querySelectorAll("[data-cmd]").forEach(function(b){
+    b.onclick=function(){ setDir(b.getAttribute("data-cmd")); };
+  });
+  document.getElementById("throttle").oninput=function(){
+    duty=+this.value; dutyEl.textContent=duty+"%"; drawWave();
+    if(dir!=="stop") setDir(dir); else applySpin();
+  };
+  drawWave();
+})();
+</script>
+<script src="assets/deck.js"></script>
+</body>
+</html>
